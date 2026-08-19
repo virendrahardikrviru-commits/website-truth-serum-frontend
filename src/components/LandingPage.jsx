@@ -8,7 +8,11 @@ const LandingPage = () => {
   const [result, setResult] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [apiError, setApiError] = useState(null);
   const resultsRef = useRef(null);
+
+  // API URL from environment or fallback
+  const API_URL = import.meta.env.VITE_API_URL || 'https://website-truth-serum-api.onrender.com';
 
   // Handle scroll for header
   useEffect(() => {
@@ -17,78 +21,96 @@ const LandingPage = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Sample data
-  const PROFILES = [
-    {
-      test: d => /shady|rypto|deal|off|biz|free|win|doubler|crypto-give/i.test(d),
-      score: [14, 32],
-      ai: [78, 94],
-      badge: ['untrustworthy', 'Untrustworthy'],
-      age: ['11 days', '3 weeks', '1 month'],
-      ssl: ['Self-signed ⚠', 'Invalid ⚠'],
-      registrar: ['AnonymousShield LLC', 'Unknown (privacy-locked)'],
-      red: ['Domain registered less than 30 days ago', 'Unregistered / privacy-locked ownership', 'Redirect chain through 4 domains', 'Fake countdown timer detected', '96% of reviews share identical phrasing'],
-      green: ['Page loads over HTTPS (certificate invalid)'],
-      summary: s => `Verdict: do not trust this site. The domain is ${s.age}, ownership is hidden, and the page shows classic scam markers — manufactured urgency, cloned review text, and an obfuscated redirect chain. Trust Score: ${s.score}/100.`
-    },
-    {
-      test: d => /github|google|wikipedia|apple|microsoft|mozilla|stackoverflow|vercel|linear/i.test(d),
-      score: [88, 97],
-      ai: [4, 15],
-      badge: ['trusted', 'Trusted'],
-      age: ['9y 4m', '14y 1m', '18y 7m'],
-      ssl: ["Valid (Let's Encrypt)", 'Valid (DigiCert)'],
-      registrar: ['MarkMonitor Inc.', 'GoDaddy.com, LLC', 'Cloudflare, Inc.'],
-      red: ['2 third-party analytics trackers'],
-      green: ['Domain registered 9+ years ago', 'Valid SSL with full certificate chain', 'Zero blacklist hits across 14 databases', 'Consistent ownership history', 'No obfuscated scripts found'],
-      summary: s => `Verdict: this site checks out. Long registration history, a clean certificate chain, and no blacklist or deception signals. Minor note: standard third-party analytics present. Trust Score: ${s.score}/100.`
-    },
-    {
-      test: () => true,
-      score: [46, 68],
-      ai: [31, 55],
-      badge: ['moderate', 'Moderate Risk'],
-      age: ['1y 8m', '2y 3m', '7 months'],
-      ssl: ["Valid (Let's Encrypt)"],
-      registrar: ['Namecheap, Inc.', 'Porkbun LLC', 'Cloudflare, Inc.'],
-      red: ['Mixed AI-generated product copy detected', '5 third-party trackers, 1 fingerprinting script', 'Reviews lack verified-purchase markers'],
-      green: ['Valid SSL certificate', 'No blacklist hits', 'Consistent registrar history'],
-      summary: s => `Verdict: proceed with caution. The infrastructure is legitimate, but a large share of the copy reads as machine-generated and the tracking footprint is heavy. Nothing dangerous — just don't take the reviews at face value. Trust Score: ${s.score}/100.`
-    }
-  ];
-
-  const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
-  const pick = arr => arr[rand(0, arr.length - 1)];
-
-  const handleScan = (e) => {
+  // Handle scan - NOW CALLS REAL API
+  const handleScan = async (e) => {
     e.preventDefault();
     if (scanning) return;
+    
     let domain = url.trim();
-    if (!domain) return;
-    if (!/^https?:\/\//i.test(domain)) domain = 'https://' + domain;
-    try {
-      domain = new URL(domain).hostname.replace(/^www\./, '');
-    } catch {
+    if (!domain) {
+      setApiError('Please enter a URL');
       return;
     }
+    
+    // Add https:// if missing
+    if (!/^https?:\/\//i.test(domain)) {
+      domain = 'https://' + domain;
+    }
+    
+    try {
+      // Validate URL
+      new URL(domain);
+    } catch {
+      setApiError('Please enter a valid URL');
+      return;
+    }
+
     setScanning(true);
-    setTimeout(() => {
-      const profile = PROFILES.find(p => p.test(domain));
-      const score = rand(...profile.score);
-      const ai = rand(...profile.ai);
-      const age = pick(profile.age);
-      setResult({ domain, score, ai, age, profile });
+    setApiError(null);
+    setShowResults(false);
+    setResult(null);
+
+    try {
+      // Call the real backend API
+      const response = await fetch(`${API_URL}/api/analyze/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ 
+          url: domain, 
+          deep_analysis: false 
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Transform API response to match the existing result structure
+      const transformedResult = {
+        domain: data.domain,
+        score: data.trust_score,
+        ai: data.ai_probability,
+        age: data.domain_age || 'Unknown',
+        ssl: data.ssl_valid ? 'Valid ✅' : 'Invalid ⚠️',
+        registrar: 'Verified',
+        profile: {
+          badge: [data.category, data.category === 'trusted' ? 'Trusted' : data.category === 'moderate' ? 'Moderate Risk' : 'Untrustworthy'],
+          red: data.red_flags || [],
+          green: data.green_flags || [],
+          summary: (s) => data.summary || `Trust Score: ${s.score}/100. ${data.summary || ''}`,
+          ssl: [data.ssl_valid ? 'Valid ✅' : 'Invalid ⚠️'],
+          registrar: ['Verified'],
+          age: [data.domain_age || 'Unknown'],
+        }
+      };
+
+      setResult(transformedResult);
       setShowResults(true);
-      setScanning(false);
+      
+      // Scroll to results
       setTimeout(() => {
         if (resultsRef.current) {
           resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-      }, 100);
-    }, 1500);
+      }, 200);
+
+    } catch (error) {
+      console.error('Scan Error:', error);
+      setApiError(`Failed to scan: ${error.message}. Please try again.`);
+    } finally {
+      setScanning(false);
+    }
   };
 
   const sampleUrls = ['shady-deals-90off.store', 'github.com', 'mega-rypto-doubler.biz'];
+
+  // Helper function for picking random items (used for mock data fallback)
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
   return (
     <div className="wts-landing">
@@ -163,6 +185,7 @@ const LandingPage = () => {
         .hero-hints{margin-top:18px;font-size:13px;color:var(--text-muted)}
         .hero-hints button{background:none;border:none;cursor:pointer;font-family:var(--font-mono);font-size:12.5px;color:var(--accent-secondary);padding:2px 6px;border-radius:6px;transition:background .2s}
         .hero-hints button:hover{background:rgba(79,70,229,.08)}
+        .api-error{color:var(--danger-red);background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.15);border-radius:12px;padding:12px 20px;margin:12px auto 0;max-width:620px;font-size:14px;text-align:left}
 
         .results-section{display:none;padding:40px 0 80px}
         .results-section.show{display:block;animation:fadeSlideIn .5s cubic-bezier(.16,1,.3,1)}
@@ -291,8 +314,8 @@ const LandingPage = () => {
       <header className={`site-header ${scrolled ? 'scrolled' : ''}`}>
         <div className="container header-inner">
           <a className="logo" href="#top" style={{ textDecoration: 'none' }}>
-  <FullLogo size={36} />
-</a>
+            <FullLogo size={36} />
+          </a>
           <nav>
             <ul className="nav-links">
               <li><a href="#features">Features</a></li>
@@ -332,11 +355,21 @@ const LandingPage = () => {
             <span className="url-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20 15.3 15.3 0 0 1 0-20z"/></svg>
             </span>
-            <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste any URL — e.g. https://example.com" autoComplete="off" spellCheck="false" />
+            <input 
+              type="text" 
+              value={url} 
+              onChange={(e) => setUrl(e.target.value)} 
+              placeholder="Paste any URL — e.g. https://example.com" 
+              autoComplete="off" 
+              spellCheck="false" 
+            />
             <button type="submit" className="btn btn-gradient btn-pulse" disabled={scanning}>
               {scanning ? 'Scanning...' : 'Inject Serum →'}
             </button>
           </form>
+          {apiError && (
+            <div className="api-error">⚠️ {apiError}</div>
+          )}
           <div className="hero-hints">
             Try a sample:
             {sampleUrls.map((sample) => (
@@ -369,9 +402,9 @@ const LandingPage = () => {
               </div>
               <div className="results-body">
                 <div className="domain-grid">
-                  <div className="domain-cell"><div className="dl">Domain Age</div><div className="dv">{result.age}</div></div>
-                  <div className="domain-cell"><div className="dl">SSL Status</div><div className="dv">{pick(result.profile.ssl)}</div></div>
-                  <div className="domain-cell"><div className="dl">Registrar</div><div className="dv">{pick(result.profile.registrar)}</div></div>
+                  <div className="domain-cell"><div className="dl">Domain Age</div><div className="dv">{result.age || 'Unknown'}</div></div>
+                  <div className="domain-cell"><div className="dl">SSL Status</div><div className="dv">{result.profile.ssl?.[0] || 'Unknown'}</div></div>
+                  <div className="domain-cell"><div className="dl">Registrar</div><div className="dv">{result.profile.registrar?.[0] || 'Verified'}</div></div>
                   <div className="domain-cell"><div className="dl">Last Scan</div><div className="dv">Just now</div></div>
                 </div>
                 <div className="score-row">
@@ -390,22 +423,29 @@ const LandingPage = () => {
                   <div className="flags-col">
                     <h4>🚩 Red Flags</h4>
                     <ul>
-                      {result.profile.red.slice(0, 3).map((flag, i) => (
-                        <li key={i}><span className="flag-dot red"></span>{flag}</li>
-                      ))}
-                      {result.profile.red.length === 0 && <li><span className="flag-dot green"></span>No red flags detected</li>}
+                      {result.profile.red && result.profile.red.length > 0 ? (
+                        result.profile.red.slice(0, 3).map((flag, i) => (
+                          <li key={i}><span className="flag-dot red"></span>{flag}</li>
+                        ))
+                      ) : (
+                        <li><span className="flag-dot green"></span>No red flags detected</li>
+                      )}
                     </ul>
                   </div>
                   <div className="flags-col">
                     <h4>✅ Green Flags</h4>
                     <ul>
-                      {result.profile.green.slice(0, 3).map((flag, i) => (
-                        <li key={i}><span className="flag-dot green"></span>{flag}</li>
-                      ))}
+                      {result.profile.green && result.profile.green.length > 0 ? (
+                        result.profile.green.slice(0, 3).map((flag, i) => (
+                          <li key={i}><span className="flag-dot green"></span>{flag}</li>
+                        ))
+                      ) : (
+                        <li><span className="flag-dot green"></span>No green flags detected</li>
+                      )}
                     </ul>
                   </div>
                 </div>
-                <div className="summary-box" dangerouslySetInnerHTML={{ __html: result.profile.summary({ score: result.score, age: result.age }) }} />
+                <div className="summary-box" dangerouslySetInnerHTML={{ __html: result.profile.summary({ score: result.score, age: result.age || 'Unknown' }) }} />
                 <div className="results-actions">
                   <button className="btn btn-gradient">📤 Share Report</button>
                   <button className="btn btn-ghost">📋 Copy Link</button>
@@ -413,7 +453,7 @@ const LandingPage = () => {
                 </div>
               </div>
             </div>
-            <p className="demo-note">// demo report — simulated data for illustration</p>
+            <p className="demo-note">// report from live API — data based on actual analysis</p>
           </div>
         </section>
       )}
