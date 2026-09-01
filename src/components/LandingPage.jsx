@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import FullLogo from './FullLogo';
+import SEO from './SEO';
+import FAQ from './FAQ';
+import { saveScanHistory } from '../services/auth';
+import { homeSchema } from '../schemas';
+import { SITE_URL, DEFAULT_DESCRIPTION } from '../config/site';
 
-const LandingPage = () => {
+const LandingPage = ({ user, onLogin, onLogout }) => {
   const [url, setUrl] = useState('');
   const [scanning, setScanning] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -25,18 +30,18 @@ const LandingPage = () => {
   const handleScan = async (e) => {
     e.preventDefault();
     if (scanning) return;
-    
+
     let domain = url.trim();
     if (!domain) {
       setApiError('Please enter a URL');
       return;
     }
-    
+
     // Add https:// if missing
     if (!/^https?:\/\//i.test(domain)) {
       domain = 'https://' + domain;
     }
-    
+
     try {
       // Validate URL
       new URL(domain);
@@ -58,40 +63,77 @@ const LandingPage = () => {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({ 
-          url: domain, 
-          deep_analysis: false 
+        body: JSON.stringify({
+          url: domain,
+          deep_analysis: false
         }),
       });
+
+      if (response.status === 429) {
+        throw new Error('Too many scans right now. Please wait a moment and try again.');
+      }
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
       }
 
       const data = await response.json();
-      
-      // Transform API response to match the existing result structure
+
+      // Transform API response to match the existing result structure.
+      // The backend is the source of truth for risk semantics: category,
+      // risk_level, score, confidence, registrar, duration and the
+      // transparency report are taken from the response verbatim.
+      const registrar = (data.domain_intel && data.domain_intel.registrar) || null;
       const transformedResult = {
         domain: data.domain,
         score: data.trust_score,
+        category: data.category,
         ai: data.ai_probability,
         age: data.domain_age || 'Unknown',
-        ssl: data.ssl_valid ? 'Valid ✅' : 'Invalid ⚠️',
-        registrar: 'Verified',
+        ssl: data.ssl_valid == null ? 'Unknown' : data.ssl_valid ? 'Valid ✅' : 'Invalid ⚠️',
+        registrar,
+        durationMs: data.duration_ms != null ? data.duration_ms : null,
+        summary: data.summary || 'This assessment reflects the evidence we could verify — it is not a guarantee of legitimacy or safety.',
+        isEvidenceMode: Array.isArray(data.evidence),
+        riskLevel: data.risk_level || null,
+        confidence: data.confidence == null ? null : data.confidence,
+        evidence: data.evidence || [],
+        verified: (data.transparency && data.transparency.verified) || [],
+        breakdown: data.category_contributions || {},
+        breakdownDetail: (data.transparency && data.transparency.breakdown_detail) || null,
+        reconciliation: (data.transparency && data.transparency.reconciliation) || null,
+        notDetermined: (data.transparency && data.transparency.not_determined) || [],
         profile: {
           badge: [data.category, data.category === 'trusted' ? 'Trusted' : data.category === 'moderate' ? 'Moderate Risk' : 'Untrustworthy'],
           red: data.red_flags || [],
           green: data.green_flags || [],
-          summary: (s) => data.summary || `Trust Score: ${s.score}/100. ${data.summary || ''}`,
-          ssl: [data.ssl_valid ? 'Valid ✅' : 'Invalid ⚠️'],
-          registrar: ['Verified'],
+          ssl: [data.ssl_valid == null ? 'Unknown' : data.ssl_valid ? 'Valid ✅' : 'Invalid ⚠️'],
+          registrar: [registrar || 'Not determined'],
           age: [data.domain_age || 'Unknown'],
         }
       };
 
       setResult(transformedResult);
       setShowResults(true);
-      
+
+       // Save scan history if user is logged in
+if (user) {
+  try {
+    await saveScanHistory(user.id, {
+      domain: data.domain,
+      trust_score: data.trust_score,
+      category: data.category,
+      ai_probability: data.ai_probability,
+      red_flags: data.red_flags || [],
+      green_flags: data.green_flags || [],
+      summary: data.summary,
+    });
+    console.log('Scan saved to history!');
+  } catch (historyError) {
+    console.error('Failed to save scan history:', historyError);
+  }
+}
+
       // Scroll to results
       setTimeout(() => {
         if (resultsRef.current) {
@@ -109,11 +151,81 @@ const LandingPage = () => {
 
   const sampleUrls = ['shady-deals-90off.store', 'github.com', 'mega-rypto-doubler.biz'];
 
+  // Risk presentation follows the backend's interpretation. The backend maps
+  // the numeric score + evidence breadth to a `category` and `risk_level`; the
+  // frontend renders those values and never re-derives risk from hard-coded
+  // score thresholds (a score of 76 can still be `category: "moderate"` when
+  // the trusted-breadth guard applies).
+  const RISK_LABELS = { low: 'Low Risk', moderate: 'Moderate Risk', elevated: 'Elevated Risk', high: 'High Risk' };
+  const RISK_BADGE_CLS = { low: 'trusted', moderate: 'moderate', elevated: 'moderate', high: 'untrustworthy' };
+  const CATEGORY_META = {
+    trusted: { color: '#22c55e', bar: 'linear-gradient(90deg,#22c55e,#00FF66)', label: 'Trusted' },
+    moderate: { color: '#eab308', bar: 'linear-gradient(90deg,#eab308,#facc15)', label: 'Moderate Risk' },
+    untrustworthy: { color: '#ef4444', bar: 'linear-gradient(90deg,#ef4444,#f87171)', label: 'Untrustworthy' },
+  };
+  const categoryMeta = (res) => CATEGORY_META[res?.category] || CATEGORY_META.moderate;
+  const displayRisk = (res) => {
+    if (res && res.riskLevel && RISK_BADGE_CLS[res.riskLevel]) {
+      return { label: RISK_LABELS[res.riskLevel], cls: RISK_BADGE_CLS[res.riskLevel] };
+    }
+    return { label: res?.profile?.badge?.[1] || 'Unknown', cls: res?.profile?.badge?.[0] || 'moderate' };
+  };
+  const fmtDuration = (ms) => (ms != null ? `${(ms / 1000).toFixed(1)}s` : null);
+  const fmtReconciliation = (rec) => {
+    if (!rec) return null;
+    const terms = Object.entries(rec.contributions || {}).map(([cat, delta]) => `${cat} ${delta > 0 ? '+' : ''}${delta}`);
+    const formula = `Base ${rec.base}${terms.length ? ` + (${terms.join(', ')})` : ''} = ${rec.reconciled_score}`;
+    return rec.exact ? formula : `${formula} (final score ${rec.final_score})`;
+  };
+  // Confidence reflects usable evidence categories, not individual signal
+  // counts. Derived from the backend's own verified/not-determined lists.
+  const confidenceNote = (res) => {
+    const measured = new Set((res?.verified || []).map((v) => v.category)).size;
+    const planned = measured + (res?.notDetermined || []).length;
+    return `Coverage across ${measured} of ${planned} planned evidence dimensions`;
+  };
+
+  // FAQ content (also drives the FAQPage JSON-LD schema via the FAQ component)
+  const faqItems = [
+    {
+      question: 'What is a website risk score?',
+      answer:
+        'A website risk score is a 0–100 rating anchored at 50 (unknown). Positive security and domain evidence raises it, negative evidence lowers it, and missing evidence never counts against a site. Every report shows the exact evidence and the math behind the score.',
+    },
+    {
+      question: 'How does Website Truth Serum analyze a website?',
+      answer:
+        'We fetch the page once and check HTTPS behavior, TLS certificate validity, security headers, domain registration (RDAP), and page metadata. Each observed fact becomes a piece of evidence that a deterministic engine sums into a score and confidence. Dimensions we could not measure are listed explicitly as unknown.',
+    },
+    {
+      question: 'How accurate is the trust analysis?',
+      answer:
+        'We show you what we could verify and what we could not. The score is deterministic — the same evidence always produces the same score — and the report lists every signal. It is an evidence summary, not a guarantee that a site is legitimate or safe.',
+    },
+    {
+      question: 'Is Website Truth Serum free to use?',
+      answer:
+        'Yes. The free plan includes 10 scans per day with a risk score, confidence, and a full evidence breakdown — no credit card and no sign-up required.',
+    },
+    {
+      question: 'Do I need an account or a browser extension?',
+      answer:
+        'No. You can scan any URL from the homepage without an account. Creating a free account lets you save your scan history, and a browser extension is optional.',
+    },
+  ];
+
   // Helper function for picking random items (used for mock data fallback)
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  //const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
   return (
-    <div className="wts-landing">
+    <>
+      <SEO
+        title="Website Trust Checker"
+        description={DEFAULT_DESCRIPTION}
+        canonical={`${SITE_URL}/`}
+        schema={homeSchema}
+      />
+      <div className="wts-landing">
       <style>{`
         :root {
           --bg-main: #f8fafc;
@@ -169,9 +281,10 @@ const LandingPage = () => {
         .glow-dot{width:8px;height:8px;border-radius:50%;background:var(--accent-primary-dark);position:relative}
         .glow-dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;background:rgba(0,255,102,.4);animation:dotPulse 2s ease-out infinite}
         @keyframes dotPulse{0%{transform:scale(.6);opacity:1}100%{transform:scale(1.8);opacity:0}}
-        .hero h1{font-size:clamp(38px,6vw,64px);font-weight:800;margin-bottom:22px}
+        .hero h1{font-size:clamp(38px,6vw,64px);font-weight:800;margin-bottom:18px}
         .hero h1 .truth{background:var(--accent-gradient);-webkit-background-clip:text;background-clip:text;color:transparent}
-        .hero-sub{font-size:clamp(16px,2.2vw,19px);color:var(--text-secondary);max-width:640px;margin:0 auto 20px}
+        .hero-headline{font-family:var(--font-heading);font-size:clamp(22px,2.8vw,30px);font-weight:700;color:var(--text-primary);letter-spacing:-0.02em;max-width:720px;margin:0 auto 14px}
+        .hero-desc{font-size:clamp(16px,2.2vw,19px);color:var(--text-secondary);max-width:640px;margin:0 auto 20px}
         .trust-banner{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:13px;color:var(--text-muted);margin-bottom:36px}
         .trust-banner strong{color:var(--accent-primary-dark);font-weight:500}
         .scan-form{display:flex;align-items:center;gap:10px;max-width:620px;margin:0 auto;background:var(--bg-card);border:1px solid var(--border-default);border-radius:999px;padding:8px 8px 8px 22px;box-shadow:0 0 20px rgba(0,255,102,0),0 12px 40px rgba(15,23,42,.06);transition:box-shadow .35s,border-color .35s}
@@ -283,6 +396,30 @@ const LandingPage = () => {
         .footer-col a:hover{color:var(--accent-primary-dark)}
         .footer-bottom{border-top:1px solid var(--border-default);padding-top:24px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--text-muted)}
 
+        .score-row.three{grid-template-columns:repeat(3,1fr)}
+        .unknown-notice{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.3);border-radius:12px;padding:12px 16px;font-size:13px;color:var(--text-secondary);margin-bottom:20px}
+        .unknown-notice strong{color:var(--text-primary);white-space:nowrap}
+        .transparency-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px}
+        .ev-item{display:block;font-size:13px}
+        .sig-cat{text-transform:capitalize;font-weight:600;color:var(--text-primary)}
+        .ev-signal{font-family:var(--font-mono);font-size:12px;color:var(--accent-secondary)}
+        .expl{color:var(--text-muted)}
+        .effect{font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted);margin-left:6px}
+        .nd-chips{display:flex;flex-wrap:wrap;gap:8px}
+        .nd-chip{font-family:var(--font-mono);font-size:12px;color:var(--text-muted);background:var(--bg-card-alt);border:1px solid var(--border-default);border-radius:99px;padding:5px 12px}
+        .nd-chip em{font-style:normal;opacity:.65}
+        .nd-note,.bd-note{font-size:12px;color:var(--text-muted);margin-top:10px;line-height:1.6}
+        .breakdown-box{background:var(--bg-card-alt);border:1px solid var(--border-default);border-radius:14px;padding:20px 22px;margin-bottom:28px}
+        .breakdown-box h4{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+        .breakdown-list{display:flex;flex-direction:column;gap:10px}
+        .breakdown-row{display:grid;grid-template-columns:130px 1fr 56px;gap:12px;align-items:center}
+        .bd-cat{font-family:var(--font-mono);font-size:12.5px;color:var(--text-secondary);text-transform:capitalize}
+        .bd-track{height:6px;background:rgba(15,23,42,.07);border-radius:99px;overflow:hidden}
+        .bd-fill{display:block;height:100%;border-radius:99px}
+        .bd-delta{font-family:var(--font-mono);font-size:12.5px;font-weight:600;text-align:right}
+        .bd-delta.pos{color:var(--trusted-green)}
+        .bd-delta.neg{color:var(--danger-red)}
+
         @media (max-width:1024px){
           .bento{grid-template-columns:repeat(2,1fr)}
           .footer-grid{grid-template-columns:repeat(2,1fr)}
@@ -302,6 +439,9 @@ const LandingPage = () => {
           .pricing-grid{grid-template-columns:1fr}
           .domain-grid{grid-template-columns:repeat(2,1fr)}
           .score-row,.flags-grid{grid-template-columns:1fr}
+          .score-row.three{grid-template-columns:1fr}
+          .transparency-grid{grid-template-columns:1fr}
+          .breakdown-row{grid-template-columns:1fr 1fr;gap:8px}
           .results-head{flex-direction:column;align-items:flex-start}
           .t-step{gap:18px}
           .t-num{width:44px;height:44px;font-size:15px;border-radius:12px}
@@ -311,57 +451,114 @@ const LandingPage = () => {
       `}</style>
 
       {/* ========== HEADER ========== */}
-      <header className={`site-header ${scrolled ? 'scrolled' : ''}`}>
-        <div className="container header-inner">
-          <a className="logo" href="#top" style={{ textDecoration: 'none' }}>
-            <FullLogo size={36} />
-          </a>
-          <nav>
-            <ul className="nav-links">
-              <li><a href="#features">Features</a></li>
-              <li><a href="#pricing">Pricing</a></li>
-              <li><a href="#how">API</a></li>
-              <li><a href="#footer">Documentation</a></li>
-            </ul>
-          </nav>
-          <div className="header-cta">
-            <a href="#scan-section" className="btn btn-gradient btn-sm">Try It Now</a>
-          </div>
-          <button className="mobile-menu-btn" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu">
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+<header className={`site-header ${scrolled ? 'scrolled' : ''}`}>
+  <div className="container header-inner">
+    <a className="logo" href="#top" style={{ textDecoration: 'none' }}>
+      <FullLogo size={36} />
+    </a>
+    <nav>
+      <ul className="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#how">API</a></li>
+        <li><a href="#footer">Documentation</a></li>
+      </ul>
+    </nav>
+
+    {/* Header CTA with Auth Buttons - NO "Try It Now" */}
+    <div className="header-cta" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      {user ? (
+        <>
+          <span style={{
+            fontSize: '13px',
+            color: '#0f172a',
+            fontWeight: '500',
+            maxWidth: '100px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            👤 {user.email?.split('@')[0]}
+          </span>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={onLogout}
+            style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '8px' }}
+          >
+            Logout
           </button>
-        </div>
-        <nav className={`mobile-nav ${mobileOpen ? 'open' : ''}`}>
-          <a href="#features" onClick={() => setMobileOpen(false)}>Features</a>
-          <a href="#pricing" onClick={() => setMobileOpen(false)}>Pricing</a>
-          <a href="#how" onClick={() => setMobileOpen(false)}>API</a>
-          <a href="#footer" onClick={() => setMobileOpen(false)}>Documentation</a>
-          <a href="#scan-section" className="btn btn-gradient btn-sm" style={{ marginTop: '8px', textDecoration: 'none', textAlign: 'center' }}>Try It Now →</a>
-        </nav>
-      </header>
+        </>
+      ) : (
+        <button
+          className="btn btn-gradient btn-sm"
+          onClick={onLogin}
+          style={{ padding: '6px 16px', fontSize: '13px', borderRadius: '8px' }}
+        >
+          Sign In
+        </button>
+      )}
+    </div>
+
+    <button className="mobile-menu-btn" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu">
+      <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </div>
+
+  {/* Mobile Navigation */}
+  <nav className={`mobile-nav ${mobileOpen ? 'open' : ''}`}>
+    <a href="#features" onClick={() => setMobileOpen(false)}>Features</a>
+    <a href="#pricing" onClick={() => setMobileOpen(false)}>Pricing</a>
+    <a href="#how" onClick={() => setMobileOpen(false)}>API</a>
+    <a href="#footer" onClick={() => setMobileOpen(false)}>Documentation</a>
+
+    {user ? (
+      <>
+        <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500', padding: '8px 0' }}>
+          👤 {user.email?.split('@')[0]}
+        </span>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={onLogout}
+          style={{ padding: '8px 16px', fontSize: '13px', borderRadius: '8px', width: '100%', textAlign: 'center' }}
+        >
+          Logout
+        </button>
+      </>
+    ) : (
+      <button
+        className="btn btn-gradient btn-sm"
+        onClick={onLogin}
+        style={{ padding: '8px 16px', fontSize: '13px', borderRadius: '8px', width: '100%', textAlign: 'center' }}
+      >
+        Sign In
+      </button>
+    )}
+  </nav>
+</header>
 
       {/* ========== HERO ========== */}
       <section className="hero" id="top">
         <div className="hero-bg"><div className="hero-grid-bg"></div></div>
         <div className="container hero-inner" id="scan-section">
-          <div className="hero-badge"><span className="glow-dot"></span>AI-Powered Trust Analysis</div>
-          <h1>Instantly separate web <span className="truth">truth</span> from filler</h1>
-          <p className="hero-sub">The AI-powered trust analyzer that scans any URL for hidden risks, fake reviews, and security vulnerabilities in 3 seconds.</p>
+          <div className="hero-badge"><span className="glow-dot"></span>Evidence-Based Trust Analysis</div>
+          <h1>Know What You're Really <span className="truth">Trusting</span> Online</h1>
+          <h2 className="hero-headline">Instantly separate web truth from filler</h2>
+          <p className="hero-desc">We scan a URL for transport security, domain registration, and page-content signals — then show you the exact evidence behind the score, including what we could not verify.</p>
           <div className="trust-banner">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            Over <strong>&nbsp;142,000&nbsp;</strong> domains analyzed today alone.
+            Deterministic scoring · evidence is shown, never hidden.
           </div>
           <form className="scan-form" onSubmit={handleScan}>
             <span className="url-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20 15.3 15.3 0 0 1 0-20z"/></svg>
             </span>
-            <input 
-              type="text" 
-              value={url} 
-              onChange={(e) => setUrl(e.target.value)} 
-              placeholder="Paste any URL — e.g. https://example.com" 
-              autoComplete="off" 
-              spellCheck="false" 
+            <input
+              type="text"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Paste any URL — e.g. https://example.com"
+              autoComplete="off"
+              spellCheck="false"
             />
             <button type="submit" className="btn btn-gradient btn-pulse" disabled={scanning}>
               {scanning ? 'Scanning...' : 'Inject Serum →'}
@@ -385,38 +582,63 @@ const LandingPage = () => {
           <div className="container">
             <div className="section-head">
               <span className="eyebrow">Scan Complete</span>
-              <h2>Your trust report</h2>
+              <h2>Your risk report</h2>
             </div>
             <div className="results-card">
               <div className="results-head">
                 <div className="results-domain">
-                  <div className="domain-favicon">{result.domain[0].toUpperCase()}</div>
+                  <div className="domain-favicon">{(result.domain && result.domain[0]) ? result.domain[0].toUpperCase() : '?'}</div>
                   <div>
                     <h3>{result.domain}</h3>
-                    <div className="scan-time">Scanned just now · 2.8s</div>
+                    <div className="scan-time">Scanned just now{fmtDuration(result.durationMs) ? ` · ${fmtDuration(result.durationMs)}` : ''}</div>
                   </div>
                 </div>
-                <span className={`status-badge ${result.profile.badge[0]}`}>
-                  <i></i><span>{result.profile.badge[1]}</span>
+                <span className={`status-badge ${displayRisk(result).cls}`}>
+                  <i></i><span>{displayRisk(result).label}</span>
                 </span>
               </div>
               <div className="results-body">
                 <div className="domain-grid">
                   <div className="domain-cell"><div className="dl">Domain Age</div><div className="dv">{result.age || 'Unknown'}</div></div>
                   <div className="domain-cell"><div className="dl">SSL Status</div><div className="dv">{result.profile.ssl?.[0] || 'Unknown'}</div></div>
-                  <div className="domain-cell"><div className="dl">Registrar</div><div className="dv">{result.profile.registrar?.[0] || 'Verified'}</div></div>
+                  <div className="domain-cell"><div className="dl">Registrar</div><div className="dv">{result.registrar || 'Not determined'}</div></div>
                   <div className="domain-cell"><div className="dl">Last Scan</div><div className="dv">Just now</div></div>
                 </div>
-                <div className="score-row">
+                {result.isEvidenceMode && result.confidence === 0 && (
+                  <div className="unknown-notice">
+                    <strong>⚠️ Unknown — not safe, not unsafe.</strong>
+                    <span>No signals could be verified, so this site is neither trusted nor flagged. A higher-confidence verdict needs more evidence.</span>
+                  </div>
+                )}
+                <div className="score-row three">
                   <div className="score-block">
-                    <div className="score-label"><span>Trust Score</span><strong style={{ color: result.score >= 75 ? '#22c55e' : result.score >= 45 ? '#eab308' : '#ef4444' }}>{result.score}</strong></div>
-                    <div className="score-track"><span className="score-fill" style={{ width: `${result.score}%`, background: result.score >= 75 ? 'linear-gradient(90deg,#22c55e,#00FF66)' : result.score >= 45 ? 'linear-gradient(90deg,#eab308,#facc15)' : 'linear-gradient(90deg,#ef4444,#f87171)' }}></span></div>
-                    <div className="score-note">Weighted across security, reputation &amp; content signals</div>
+                    <div className="score-label"><span>Risk Score</span><strong style={{ color: categoryMeta(result).color }}>{result.score}</strong></div>
+                    <div className="score-track"><span className="score-fill" style={{ width: `${result.score}%`, background: categoryMeta(result).bar }}></span></div>
+                    <div className="score-note">{result.category ? `${categoryMeta(result).label} · risk level ${result.riskLevel || 'unknown'}` : 'Weighted across evidence signals'}</div>
                   </div>
                   <div className="score-block">
-                    <div className="score-label"><span>AI Likelihood</span><strong style={{ color: result.ai <= 30 ? '#22c55e' : result.ai <= 60 ? '#eab308' : '#ef4444' }}>{result.ai}%</strong></div>
-                    <div className="score-track"><span className="score-fill" style={{ width: `${result.ai}%`, background: result.ai <= 30 ? 'linear-gradient(90deg,#22c55e,#00FF66)' : result.ai <= 60 ? 'linear-gradient(90deg,#eab308,#facc15)' : 'linear-gradient(90deg,#ef4444,#f87171)' }}></span></div>
+                    <div className="score-label"><span>AI Likelihood</span>{result.ai != null ? (
+                      <strong style={{ color: result.ai <= 30 ? '#22c55e' : result.ai <= 60 ? '#eab308' : '#ef4444' }}>{result.ai}%</strong>
+                    ) : (
+                      <strong style={{ color: '#9ca3af' }}>Not measured</strong>
+                    )}</div>
+                    <div className="score-track">{result.ai != null ? (
+                      <span className="score-fill" style={{ width: `${result.ai}%`, background: result.ai <= 30 ? 'linear-gradient(90deg,#22c55e,#00FF66)' : result.ai <= 60 ? 'linear-gradient(90deg,#eab308,#facc15)' : 'linear-gradient(90deg,#ef4444,#f87171)' }}></span>
+                    ) : null}</div>
                     <div className="score-note">Share of on-page text likely machine-generated</div>
+                  </div>
+                  <div className="score-block">
+                    <div className="score-label"><span>Confidence</span>{result.confidence != null ? (
+                      <strong style={{ color: result.confidence >= 0.6 ? '#22c55e' : result.confidence >= 0.3 ? '#eab308' : '#9ca3af' }}>{Math.round(result.confidence * 100)}%</strong>
+                    ) : (
+                      <strong style={{ color: '#9ca3af' }}>Not measured</strong>
+                    )}</div>
+                    <div className="score-track">{result.confidence != null ? (
+                      <span className="score-fill" style={{ width: `${result.confidence * 100}%`, background: 'linear-gradient(90deg,#4f46e5,#8b5cf6)' }}></span>
+                    ) : null}</div>
+                    <div className="score-note">{result.confidence != null
+                      ? confidenceNote(result)
+                      : 'Available in evidence mode'}</div>
                   </div>
                 </div>
                 <div className="flags-grid">
@@ -428,7 +650,9 @@ const LandingPage = () => {
                           <li key={i}><span className="flag-dot red"></span>{flag}</li>
                         ))
                       ) : (
-                        <li><span className="flag-dot green"></span>No red flags detected</li>
+                        <li><span className="flag-dot green"></span>{result.isEvidenceMode && result.confidence === 0
+                          ? 'No negative signals could be verified — this is unknown, not safe.'
+                          : 'No red flags detected'}</li>
                       )}
                     </ul>
                   </div>
@@ -440,12 +664,89 @@ const LandingPage = () => {
                           <li key={i}><span className="flag-dot green"></span>{flag}</li>
                         ))
                       ) : (
-                        <li><span className="flag-dot green"></span>No green flags detected</li>
+                        <li><span className="flag-dot green"></span>{result.isEvidenceMode && result.confidence === 0
+                          ? 'No positive signals could be verified — this is unknown, not a clean bill of health.'
+                          : 'No green flags detected'}</li>
                       )}
                     </ul>
                   </div>
                 </div>
-                <div className="summary-box" dangerouslySetInnerHTML={{ __html: result.profile.summary({ score: result.score, age: result.age || 'Unknown' }) }} />
+                {result.isEvidenceMode && (
+                  <>
+                    <div className="transparency-grid">
+                      <div className="flags-col">
+                        <h4>✓ What We Verified</h4>
+                        {result.verified.length > 0 ? (
+                          <ul>
+                            {result.verified.map((item, i) => (
+                              <li key={i}>
+                                <span className="flag-dot green"></span>
+                                <span className="ev-item">
+                                  <strong className="sig-cat">{item.category}</strong>
+                                  <span className="ev-signal"> · {item.signal}</span>
+                                  {item.explanation ? <span className="expl"> — {item.explanation}</span> : null}
+                                  <span className="effect">
+                                    {item.applied_effect != null ? `${item.applied_effect > 0 ? '+' : ''}${item.applied_effect}` : `${item.effect > 0 ? '+' : ''}${item.effect}`}
+                                    {item.applied_effect != null && item.raw_effect !== item.applied_effect ? ` (raw ${item.raw_effect})` : ''}
+                                  </span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <ul>
+                            <li><span className="flag-dot green"></span>No signals could be verified — evidence was unavailable.</li>
+                          </ul>
+                        )}
+                      </div>
+                      <div className="flags-col">
+                        <h4>— What We Could Not Determine</h4>
+                        {result.notDetermined.length > 0 ? (
+                          <>
+                            <div className="nd-chips">
+                              {result.notDetermined.map((cat, i) => (
+                                <span key={i} className="nd-chip">{cat}<em> not measured</em></span>
+                              ))}
+                            </div>
+                            <p className="nd-note">Unknown is neutral — a dimension that was not measured is neither safe nor unsafe.</p>
+                          </>
+                        ) : (
+                          <ul>
+                            <li><span className="flag-dot green"></span>All planned evidence dimensions were measured.</li>
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                    <div className="breakdown-box">
+                      <h4>⚖️ Evidence Breakdown</h4>
+                      {Object.keys(result.breakdown).length > 0 ? (
+                        <div className="breakdown-list">
+                          {Object.entries(result.breakdown).map(([cat, delta]) => {
+                            const detail = result.breakdownDetail && result.breakdownDetail[cat];
+                            return (
+                              <div key={cat} className="breakdown-row">
+                                <span className="bd-cat">{cat}{detail && detail.capped ? ' *' : ''}</span>
+                                <span className="bd-track">
+                                  <span className="bd-fill" style={{ width: `${Math.min(100, Math.abs(delta) * 10)}%`, background: delta >= 0 ? 'linear-gradient(90deg,#22c55e,#00FF66)' : 'linear-gradient(90deg,#ef4444,#f87171)' }}></span>
+                                </span>
+                                <span className={`bd-delta ${delta >= 0 ? 'pos' : 'neg'}`}>{delta > 0 ? `+${delta}` : delta}</span>
+                              </div>
+                            );
+                          })}
+                          <p className="bd-note">
+                            {result.reconciliation
+                              ? `${fmtReconciliation(result.reconciliation)}. Contributions are capped per category so no single signal can dominate.`
+                              : 'Neutral anchor 50 + Σ contributions = ' + result.score + '. Contributions are capped per category so no single signal can dominate.'}
+                            {result.breakdownDetail && Object.values(result.breakdownDetail).some((d) => d.capped) ? ' (* = category hit its influence cap.)' : ''}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="bd-note">No category contributions — the score remains at the neutral anchor (50) because nothing could be verified.</p>
+                      )}
+                    </div>
+                  </>
+                )}
+                <div className="summary-box">{result.summary || 'This assessment reflects the evidence we could verify — it is not a guarantee of legitimacy or safety.'}</div>
                 <div className="results-actions">
                   <button className="btn btn-gradient">📤 Share Report</button>
                   <button className="btn btn-ghost">📋 Copy Link</button>
@@ -463,32 +764,32 @@ const LandingPage = () => {
         <div className="container">
           <div className="section-head">
             <span className="eyebrow">The Serum Toolkit</span>
-            <h2>Three engines. One verdict.</h2>
-            <p>Every scan runs a full battery of checks across code, language, and infrastructure — distilled into a score anyone can read.</p>
+            <h2>Evidence in. Risk out.</h2>
+            <p>Every scan runs a bounded battery of checks across transport, domain, and content — distilled into a score anyone can read, with the evidence shown beside it.</p>
           </div>
           <div className="bento">
             <div className="bento-card">
               <div className="bento-icon">🔍</div>
-              <h3>Deep Script Audit</h3>
-              <p>We deobfuscate and trace every script on the page, surfacing what the site would rather you didn't see.</p>
+              <h3>Security &amp; Infrastructure Checks</h3>
+              <p>We check how the page responds over HTTPS: TLS certificate validity, HTTP behavior, security headers, and strict response-size boundaries.</p>
               <div className="bento-tags">
-                <span>hidden trackers</span><span>malware</span><span>redirect loops</span><span>fingerprinting</span>
+                <span>HTTPS behavior</span><span>TLS certificate</span><span>security headers</span><span>response limits</span>
               </div>
             </div>
             <div className="bento-card">
-              <div className="bento-icon">🤖</div>
-              <h3>Linguistic Truth Evaluation</h3>
-              <p>Our LLM cross-examines reviews, claims, and copy for the statistical fingerprints of manufactured persuasion.</p>
+              <div className="bento-icon">🧪</div>
+              <h3>Page Content Signals</h3>
+              <p>We analyze the fetched HTML for title, description, language, viewport, canonical, and substantial content. These are neutral observations, not a verdict on the text.</p>
               <div className="bento-tags">
-                <span>inflated reviews</span><span>synthetic claims</span><span>urgency bait</span><span>AI text ratio</span>
+                <span>title &amp; metadata</span><span>content presence</span><span>neutral signals</span><span>no text guessing</span>
               </div>
             </div>
             <div className="bento-card">
-              <div className="bento-icon">⚡</div>
-              <h3>Edge-Engine Diagnostics</h3>
-              <p>Scans execute at the edge, close to you — full reports in about 3 seconds, from anywhere on the planet.</p>
+              <div className="bento-icon">⚖️</div>
+              <h3>Deterministic Evidence Scoring</h3>
+              <p>Every scan is bounded by a hard deadline. The score anchors at 50, evidence is capped per category, confidence reflects coverage, and unknown stays unknown.</p>
               <div className="bento-tags">
-                <span>3-second reports</span><span>global infrastructure</span><span>40+ signals</span><span>API access</span>
+                <span>neutral anchor</span><span>category caps</span><span>confidence</span><span>bounded scans</span>
               </div>
             </div>
           </div>
@@ -507,25 +808,25 @@ const LandingPage = () => {
             <div className="t-step">
               <div className="t-num">01</div>
               <div className="t-body">
-                <h3>Ingestion</h3>
-                <p>The URL is stripped down to its raw source code — every script, pixel, and network call laid bare for inspection.</p>
-                <span className="t-meta">~0.4s · raw DOM + network trace</span>
+                <h3>Fetch &amp; Guard</h3>
+                <p>The URL is validated against public targets, fetched once with a hard size limit, and every redirect is checked. Oversized or unavailable pages produce no evidence.</p>
+                <span className="t-meta">guarded single fetch · bounded body</span>
               </div>
             </div>
             <div className="t-step">
               <div className="t-num">02</div>
               <div className="t-body">
-                <h3>Cross-Examination</h3>
-                <p>Our LLM evaluates the content for deceptive patterns — fake-review cadence, manufactured urgency, claims that don't add up.</p>
-                <span className="t-meta">~1.8s · linguistic + behavioral analysis</span>
+                <h3>Collect Evidence</h3>
+                <p>TLS certificate, HTTPS behavior, security headers, domain registration (RDAP), and page metadata become discrete evidence items. Reputation providers are optional and off by default.</p>
+                <span className="t-meta">deterministic evidence collection</span>
               </div>
             </div>
             <div className="t-step">
               <div className="t-num">03</div>
               <div className="t-body">
-                <h3>Verification</h3>
-                <p>Domain history, registration records, SSL chain, and global blacklist databases are checked to confirm who's really behind the site.</p>
-                <span className="t-meta">~0.8s · WHOIS + blacklist cross-check</span>
+                <h3>Score &amp; Explain</h3>
+                <p>The deterministic engine anchors at 50, applies each evidence item under category caps, and reports the score, risk level, confidence, verified facts, and what could not be determined.</p>
+                <span className="t-meta">50 anchor · capped · explainable</span>
               </div>
             </div>
           </div>
@@ -547,9 +848,9 @@ const LandingPage = () => {
               <div className="plan-price"><span className="amount">$0</span><span className="per">/ forever</span></div>
               <ul className="plan-features">
                 <li><span className="tick">✓</span>10 scans per day</li>
-                <li><span className="tick">✓</span>Trust Score &amp; basic flags</li>
-                <li><span className="tick">✓</span>Domain age &amp; SSL checks</li>
-                <li className="off"><span className="x">—</span>Deep script audit</li>
+                <li><span className="tick">✓</span>Risk score &amp; evidence flags</li>
+                <li><span className="tick">✓</span>Domain age &amp; TLS checks</li>
+                <li className="off"><span className="x">—</span>Deep evidence breakdown</li>
                 <li className="off"><span className="x">—</span>API access &amp; bulk scans</li>
                 <li className="off"><span className="x">—</span>PDF trust reports</li>
               </ul>
@@ -562,15 +863,29 @@ const LandingPage = () => {
               <div className="plan-price"><span className="amount">$29</span><span className="per">/ month</span></div>
               <ul className="plan-features">
                 <li><span className="tick">✓</span>Unlimited scans</li>
-                <li><span className="tick">✓</span>Full deep script audit</li>
-                <li><span className="tick">✓</span>AI text ratio &amp; linguistic analysis</li>
+                <li><span className="tick">✓</span>Full evidence breakdown</li>
+                <li><span className="tick">✓</span>Priority processing</li>
                 <li><span className="tick">✓</span>API access &amp; bulk URL scans</li>
                 <li><span className="tick">✓</span>Shareable PDF trust reports</li>
-                <li><span className="tick">✓</span>Priority edge processing</li>
+                <li><span className="tick">✓</span>Scan history &amp; alerts</li>
               </ul>
               <a href="#scan-section" className="btn btn-gradient" style={{ textDecoration: 'none', textAlign: 'center' }}>Go Pro →</a>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ========== FAQ ========== */}
+      <section
+        id="faq"
+        style={{
+          background: 'var(--bg-card)',
+          borderTop: '1px solid var(--border-default)',
+          padding: '0',
+        }}
+      >
+        <div className="container">
+          <FAQ items={faqItems} />
         </div>
       </section>
 
@@ -599,33 +914,33 @@ const LandingPage = () => {
                 </span>
                 Website Truth Serum
               </a>
-              <p>The AI-powered trust analyzer for a web full of filler.</p>
+              <p>The evidence-based trust analyzer for a web full of filler.</p>
             </div>
             <div className="footer-col">
               <h4>Product</h4>
               <ul>
-                <li><a href="#features">Features</a></li>
-                <li><a href="#pricing">Pricing</a></li>
-                <li><a href="#how">API</a></li>
+                <li><a href="/features">Features</a></li>
+                <li><a href="/pricing">Pricing</a></li>
+                <li><a href="/how-it-works">How It Works</a></li>
                 <li><a href="#top">Browser Extension</a></li>
               </ul>
             </div>
             <div className="footer-col">
               <h4>Resources</h4>
               <ul>
-                <li><a href="#footer">Documentation</a></li>
-                <li><a href="#footer">Trust Score Methodology</a></li>
-                <li><a href="#footer">Blacklist Sources</a></li>
+                <li><a href="/how-it-works">Documentation</a></li>
+                <li><a href="/how-it-works">Risk Score Methodology</a></li>
+                <li><a href="/how-it-works">Blacklist Sources</a></li>
                 <li><a href="#footer">Changelog</a></li>
               </ul>
             </div>
             <div className="footer-col">
               <h4>Company</h4>
               <ul>
-                <li><a href="#footer">About</a></li>
+                <li><a href="/about">About</a></li>
                 <li><a href="#footer">Blog</a></li>
                 <li><a href="#footer">Careers</a></li>
-                <li><a href="#footer">Contact</a></li>
+                <li><a href="/contact">Contact</a></li>
               </ul>
             </div>
             <div className="footer-col">
@@ -643,7 +958,8 @@ const LandingPage = () => {
           </div>
         </div>
       </footer>
-    </div>
+      </div>
+    </>
   );
 };
 

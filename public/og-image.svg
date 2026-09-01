@@ -1,0 +1,30 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#0F172A"/>
+  <circle cx="600" cy="315" r="360" fill="url(#bgGlow)" opacity="0.35"/>
+  <defs>
+    <linearGradient id="bgGlow" x1="600" y1="0" x2="600" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00FF66"/>
+      <stop offset="1" stop-color="#4F46E5" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="grad" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00FF66"/>
+      <stop offset="0.52" stop-color="#00D9A0"/>
+      <stop offset="1" stop-color="#4F46E5"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Brand mark (shield + serum drop + checkmark) -->
+  <g transform="translate(600 268)">
+    <path d="M0-92L80-68V-46C80 6 63 44 40 58C17 44 0 6 0-46L0-92Z" transform="translate(-40 34)" fill="#0F172A" stroke="url(#grad)" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M0-64C0-64-28-22-28 2C-28 20-13 30 0 30C13 30 28 20 28 2C28-22 0-64 0-64Z" fill="url(#grad)"/>
+    <path d="M-14-4L-4 6L15-14" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Headline -->
+  <text x="600" y="470" text-anchor="middle" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="72" font-weight="800" fill="#FFFFFF">Know What You're</text>
+  <text x="600" y="555" text-anchor="middle" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="72" font-weight="800" fill="url(#grad)">Really Trusting</text>
+
+  <!-- Tagline -->
+  <text x="600" y="600" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="500" fill="#94A3B8">websitetruthserum.com · AI-Powered Website Trust Checker</text>
+</svg>

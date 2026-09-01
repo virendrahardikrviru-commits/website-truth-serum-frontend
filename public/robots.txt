@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+
+# Block private/authenticated areas from crawling
+Disallow: /dashboard
+Disallow: /account
+Disallow: /login
+Disallow: /signup
+Disallow: /api/
+
+# Allow image crawlers everywhere (OG images live in the root)
+User-agent: Googlebot-Image
+Allow: /
+
+# Sitemap
+Sitemap: https://websitetruthserum.com/sitemap.xml

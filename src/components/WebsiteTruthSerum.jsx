@@ -85,7 +85,7 @@ const WebsiteTruthSerum = () => {
       <div className="text-center mb-12">
         <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-full px-4 py-1.5 text-sm text-indigo-700 font-medium mb-4">
           <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-          AI-Powered Trust Analysis
+          Evidence-Based Trust Analysis
         </div>
         <h1 className="text-4xl md:text-5xl font-bold text-slate-900 leading-tight mb-4">
           Check if a website is{' '}
