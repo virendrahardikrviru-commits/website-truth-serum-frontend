@@ -113,6 +113,7 @@ const LandingPage = ({ user, onLogin, onLogout }) => {
     scanControllerRef.current = controller;
     scanTimeoutRef.current = timeoutId;
 
+    try {
     let response;
     try {
       // Call the real backend API (exactly one request per scan).
