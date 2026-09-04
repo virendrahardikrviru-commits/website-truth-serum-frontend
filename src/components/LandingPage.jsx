@@ -294,7 +294,20 @@ if (user) {
       '🛡️ Website Truth Serum — Risk Report',
       '',
       `Website: ${result.domain || result.scannedUrl || 'Unknown'}`,
-      `Risk: ${result.category === 'trusted' ? 'Trusted' : result.category === 'moderate' ? 'Moderate Risk' : 'Untrustworthy'}`,
+      `Risk: ${
+  result.category === 'trusted'
+    ? 'Trusted'
+    : result.category === 'moderate'
+      ? 'Moderate Risk'
+      : result.riskLevel
+        ? ({
+            low: 'Low Risk',
+            moderate: 'Moderate Risk',
+            elevated: 'Elevated Risk',
+            high: 'High Risk',
+          }[result.riskLevel] || result.riskLevel)
+        : 'Unknown'
+}`,
       `Risk Score: ${result.score != null ? `${result.score}/100` : 'Unknown'}`,
       `Confidence: ${
         result.confidence != null
