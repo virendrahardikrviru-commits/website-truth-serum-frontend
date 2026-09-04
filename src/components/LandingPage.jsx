@@ -258,6 +258,55 @@ if (user) {
     }
   };
 
+  // Share the scanned report using the browser's native Share API.
+// Falls back to copying the scanned URL when Web Share is unavailable.
+const shareScanReport = async () => {
+  const text = result && (result.scannedUrl || result.domain);
+
+  if (!text) {
+    setCopyFeedback('No scanned URL is available to share.');
+    return;
+  }
+
+  const shareData = {
+    title: 'Website Truth Serum — Risk Report',
+    text: `Risk report for ${result.domain || text}`,
+    url: text,
+  };
+
+  try {
+    if (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function'
+    ) {
+      await navigator.share(shareData);
+      return;
+    }
+
+    // Desktop browsers without Web Share: use the existing clipboard path.
+    if (
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === 'function'
+    ) {
+      await navigator.clipboard.writeText(text);
+      setCopyFeedback('Report link copied to clipboard.');
+      window.setTimeout(() => setCopyFeedback(null), 3000);
+      return;
+    }
+
+    setCopyFeedback('Sharing is not available in this browser.');
+    window.setTimeout(() => setCopyFeedback(null), 3000);
+  } catch (error) {
+    // User cancellation is normal and should not be reported as an error.
+    if (error && error.name === 'AbortError') {
+      return;
+    }
+
+    setCopyFeedback('Sharing is not available in this browser.');
+    window.setTimeout(() => setCopyFeedback(null), 3000);
+  }
+};
+
   // Copy the scanned URL to the clipboard (no persistence, no network).
   // Uses the browser Clipboard API only, with truthful failure feedback.
   const copyScanLink = async () => {
@@ -922,8 +971,14 @@ if (user) {
                 )}
                 <div className="summary-box">{result.summary || 'This assessment reflects the evidence we could verify — it is not a guarantee of legitimacy or safety.'}</div>
                 <div className="results-actions">
-                  <button className="btn btn-gradient" type="button" disabled aria-describedby="share-unavailable-reason" title="Report sharing is not available in this version">📤 Share Report</button>
-                  <span id="share-unavailable-reason" className="sr-label">Report sharing is not available in this version. Use Copy Link to copy the scanned URL.</span>
+                  <button
+                    className="btn btn-gradient"
+                    type="button"
+                    onClick={shareScanReport}
+                    title="Share this risk report"
+                  >
+                    📤 Share Report
+                  </button>
                   <button className="btn btn-ghost" type="button" onClick={copyScanLink}>📋 Copy Link</button>
                   <button className="btn btn-ghost" type="button" onClick={() => { setShowResults(false); setUrl(''); setCopyFeedback(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Scan another URL</button>
                 </div>
