@@ -5,6 +5,30 @@ import FAQ from './FAQ';
 import { saveScanHistory } from '../services/auth';
 import { homeSchema } from '../schemas';
 import { SITE_URL, DEFAULT_DESCRIPTION } from '../config/site';
+import { categoryLabel, classifyEffect, deriveSslStatus, signalLabel, sslStatusLabel } from '../lib/evidenceUi';
+import {
+  FALLBACK_ERROR_MESSAGE,
+  NETWORK_ERROR_MESSAGE,
+  TIMEOUT_ERROR_MESSAGE,
+  scanErrorMessage,
+} from '../lib/scanMessages';
+
+// Internal marker for scan failures that already carry a safe, static,
+// user-facing message. Raw exceptions are never surfaced to the user.
+class ScanFailure extends Error {
+  constructor(kind, status = null) {
+    super(kind === 'network' ? NETWORK_ERROR_MESSAGE : scanErrorMessage(status));
+    this.name = 'ScanFailure';
+    this.kind = kind;
+    this.status = status;
+  }
+}
+
+// Bounded client-side scan budget. Render free-tier cold starts can exceed
+// 50 seconds and the backend evidence deadline is 22 seconds, so 90 seconds is
+// a conservative cap that rarely fires on legitimate slow scans yet stops an
+// indefinite "Scanning..." wait.
+const SCAN_TIMEOUT_MS = 90000;
 
 const LandingPage = ({ user, onLogin, onLogout }) => {
   const [url, setUrl] = useState('');
@@ -14,7 +38,11 @@ const LandingPage = ({ user, onLogin, onLogout }) => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [apiError, setApiError] = useState(null);
+  const [copyFeedback, setCopyFeedback] = useState(null);
   const resultsRef = useRef(null);
+  const unmountedRef = useRef(false);
+  const scanControllerRef = useRef(null);
+  const scanTimeoutRef = useRef(null);
 
   // API URL from environment or fallback
   const API_URL = import.meta.env.VITE_API_URL || 'https://website-truth-serum-api.onrender.com';
@@ -24,6 +52,25 @@ const LandingPage = ({ user, onLogin, onLogout }) => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Abort any in-flight scan and clear its timer when the component unmounts
+  // so no state update can happen after navigation away.
+  useEffect(() => {
+    return () => {
+      unmountedRef.current = true;
+      if (scanControllerRef.current) {
+        try {
+          scanControllerRef.current.abort();
+        } catch (abortErr) {
+          // Abort errors are never user-facing.
+        }
+      }
+      if (scanTimeoutRef.current) {
+        window.clearTimeout(scanTimeoutRef.current);
+        scanTimeoutRef.current = null;
+      }
+    };
   }, []);
 
   // Handle scan - NOW CALLS REAL API
@@ -55,42 +102,81 @@ const LandingPage = ({ user, onLogin, onLogout }) => {
     setShowResults(false);
     setResult(null);
 
+    // One AbortController + bounded timeout per scan.
+    let settled = false;
+    let abortedByTimeout = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      abortedByTimeout = true;
+      controller.abort();
+    }, SCAN_TIMEOUT_MS);
+    scanControllerRef.current = controller;
+    scanTimeoutRef.current = timeoutId;
+
+    let response;
     try {
-      // Call the real backend API
-      const response = await fetch(`${API_URL}/api/analyze/`, {
+      // Call the real backend API (exactly one request per scan).
+      response = await fetch(`${API_URL}/api/analyze/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           url: domain,
           deep_analysis: false
         }),
       });
-
-      if (response.status === 429) {
-        throw new Error('Too many scans right now. Please wait a moment and try again.');
+    } catch (fetchError) {
+      // A controlled abort (timeout/unmount) is not a network failure; it is
+      // re-thrown and handled by the outer catch.
+      if (fetchError && fetchError.name === 'AbortError') {
+        throw fetchError;
       }
+      // Transport failure (offline, DNS, refused). Raw text is never shown.
+      throw new ScanFailure('network');
+    }
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+    if (!response.ok) {
+      throw new ScanFailure('http', response.status);
+    }
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      // A controlled abort during body read is not a parse failure.
+      if (parseError && parseError.name === 'AbortError') {
+        throw parseError;
       }
+      // Unreadable body; treat as a service failure, never surface the error.
+      throw new ScanFailure('http', 500);
+    }
 
-      const data = await response.json();
+    settled = true;
 
       // Transform API response to match the existing result structure.
       // The backend is the source of truth for risk semantics: category,
       // risk_level, score, confidence, registrar, duration and the
       // transparency report are taken from the response verbatim.
       const registrar = (data.domain_intel && data.domain_intel.registrar) || null;
+      // TLS display status is derived from the collected ssl evidence rather
+      // than the top-level convenience field, which is null in evidence mode.
+      // Absence of ssl_valid is never treated as invalidity.
+      const sslStatus = deriveSslStatus(
+        (data.transparency && data.transparency.verified) || null,
+        data.ssl_valid
+      );
+      const sslLabel = sslStatusLabel(sslStatus);
       const transformedResult = {
         domain: data.domain,
+        scannedUrl: domain,
         score: data.trust_score,
         category: data.category,
         ai: data.ai_probability,
         age: data.domain_age || 'Unknown',
-        ssl: data.ssl_valid == null ? 'Unknown' : data.ssl_valid ? 'Valid ✅' : 'Invalid ⚠️',
+        ssl: sslLabel,
         registrar,
         durationMs: data.duration_ms != null ? data.duration_ms : null,
         summary: data.summary || 'This assessment reflects the evidence we could verify — it is not a guarantee of legitimacy or safety.',
@@ -103,11 +189,12 @@ const LandingPage = ({ user, onLogin, onLogout }) => {
         breakdownDetail: (data.transparency && data.transparency.breakdown_detail) || null,
         reconciliation: (data.transparency && data.transparency.reconciliation) || null,
         notDetermined: (data.transparency && data.transparency.not_determined) || [],
+        notes: data.notes || [],
         profile: {
           badge: [data.category, data.category === 'trusted' ? 'Trusted' : data.category === 'moderate' ? 'Moderate Risk' : 'Untrustworthy'],
           red: data.red_flags || [],
           green: data.green_flags || [],
-          ssl: [data.ssl_valid == null ? 'Unknown' : data.ssl_valid ? 'Valid ✅' : 'Invalid ⚠️'],
+          ssl: [sslLabel],
           registrar: [registrar || 'Not determined'],
           age: [data.domain_age || 'Unknown'],
         }
@@ -143,10 +230,57 @@ if (user) {
 
     } catch (error) {
       console.error('Scan Error:', error);
-      setApiError(`Failed to scan: ${error.message}. Please try again.`);
+      // Never update UI after unmount, and never let an abort/error overwrite
+      // a successful result (race guard).
+      if (unmountedRef.current || settled) {
+        return;
+      }
+      if (error instanceof ScanFailure) {
+        setApiError(error.message);
+      } else if (error && error.name === 'AbortError') {
+        // Controlled abort (timeout/cancellation). Neutral, never a server
+        // failure claim and never raw exception text.
+        setApiError(TIMEOUT_ERROR_MESSAGE);
+      } else {
+        // Any unexpected exception: safe generic copy only.
+        setApiError(FALLBACK_ERROR_MESSAGE);
+      }
     } finally {
-      setScanning(false);
+      if (scanTimeoutRef.current) {
+        window.clearTimeout(scanTimeoutRef.current);
+        scanTimeoutRef.current = null;
+      }
+      scanControllerRef.current = null;
+      if (!unmountedRef.current) {
+        setScanning(false);
+      }
     }
+  };
+
+  // Copy the scanned URL to the clipboard (no persistence, no network).
+  // Uses the browser Clipboard API only, with truthful failure feedback.
+  const copyScanLink = async () => {
+    const text = result && (result.scannedUrl || result.domain);
+    if (!text) {
+      setCopyFeedback('No scanned URL is available to copy.');
+      return;
+    }
+    try {
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.clipboard &&
+        typeof navigator.clipboard.writeText === 'function'
+      ) {
+        await navigator.clipboard.writeText(text);
+        setCopyFeedback('Scan link copied to clipboard.');
+      } else {
+        setCopyFeedback('Copying is not available in this browser.');
+      }
+    } catch (clipError) {
+      console.error('Copy error:', clipError);
+      setCopyFeedback('Copying is not available in this browser.');
+    }
+    window.setTimeout(() => setCopyFeedback(null), 3000);
   };
 
   const sampleUrls = ['shady-deals-90off.store', 'github.com', 'mega-rypto-doubler.biz'];
@@ -182,7 +316,7 @@ if (user) {
   const confidenceNote = (res) => {
     const measured = new Set((res?.verified || []).map((v) => v.category)).size;
     const planned = measured + (res?.notDetermined || []).length;
-    return `Coverage across ${measured} of ${planned} planned evidence dimensions`;
+    return `Verified across ${measured} of ${planned} planned evidence areas`;
   };
 
   // FAQ content (also drives the FAQPage JSON-LD schema via the FAQ component)
@@ -299,6 +433,7 @@ if (user) {
         .hero-hints button{background:none;border:none;cursor:pointer;font-family:var(--font-mono);font-size:12.5px;color:var(--accent-secondary);padding:2px 6px;border-radius:6px;transition:background .2s}
         .hero-hints button:hover{background:rgba(79,70,229,.08)}
         .api-error{color:var(--danger-red);background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.15);border-radius:12px;padding:12px 20px;margin:12px auto 0;max-width:620px;font-size:14px;text-align:left}
+        .scan-note{color:var(--text-secondary);font-size:13.5px;margin:14px auto 0;max-width:620px;text-align:center}
 
         .results-section{display:none;padding:40px 0 80px}
         .results-section.show{display:block;animation:fadeSlideIn .5s cubic-bezier(.16,1,.3,1)}
@@ -333,10 +468,16 @@ if (user) {
         .flag-dot{flex-shrink:0;width:8px;height:8px;border-radius:50%;margin-top:6px}
         .flag-dot.red{background:var(--danger-red)}
         .flag-dot.green{background:var(--trusted-green)}
+        .flag-dot.evidence-positive{background:var(--trusted-green)}
+        .flag-dot.evidence-neutral{background:#94a3b8}
+        .flag-dot.evidence-negative{background:var(--danger-red)}
         .summary-box{background:linear-gradient(135deg,rgba(0,255,102,.06),rgba(79,70,229,.05));border:1px solid var(--border-default);border-radius:14px;padding:20px 22px;font-size:14.5px;color:var(--text-secondary);margin-bottom:28px;line-height:1.7}
         .summary-box strong{color:var(--text-primary)}
         .results-actions{display:flex;gap:12px;flex-wrap:wrap}
         .results-actions .btn{font-size:14px;padding:11px 22px}
+        .results-actions .btn:disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
+        .copy-status{font-size:12.5px;color:var(--text-secondary);margin-top:12px;text-align:center}
+        .sr-label,.sr-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
         .demo-note{text-align:center;font-size:12.5px;color:var(--text-muted);margin-top:18px;font-family:var(--font-mono)}
 
         .section-head{text-align:center;max-width:640px;margin:0 auto 56px}
@@ -419,6 +560,11 @@ if (user) {
         .bd-delta{font-family:var(--font-mono);font-size:12.5px;font-weight:600;text-align:right}
         .bd-delta.pos{color:var(--trusted-green)}
         .bd-delta.neg{color:var(--danger-red)}
+        .notes-box{background:rgba(79,70,229,.05);border:1px solid var(--border-default);border-left:3px solid var(--accent-secondary);border-radius:12px;padding:14px 18px;margin-bottom:28px}
+        .notes-box h4{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text-primary)}
+        .notes-box ul{list-style:none;display:flex;flex-direction:column;gap:6px}
+        .notes-box li{font-size:13px;line-height:1.55;color:var(--text-secondary);padding-left:14px;position:relative}
+        .notes-box li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--accent-secondary)}
 
         @media (max-width:1024px){
           .bento{grid-template-columns:repeat(2,1fr)}
@@ -447,6 +593,12 @@ if (user) {
           .t-num{width:44px;height:44px;font-size:15px;border-radius:12px}
           .timeline::before{left:21px}
           .footer-grid{grid-template-columns:1fr}
+        }
+        @media (max-width:380px){
+          .results-body{padding:20px 16px}
+          .results-head{padding:20px 16px}
+          .domain-grid{grid-template-columns:1fr;gap:10px}
+          .results-actions .btn{width:100%;justify-content:center}
         }
       `}</style>
 
@@ -499,13 +651,13 @@ if (user) {
       )}
     </div>
 
-    <button className="mobile-menu-btn" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu">
+    <button className="mobile-menu-btn" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu" aria-expanded={mobileOpen} aria-controls="mobile-nav">
       <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
   </div>
 
   {/* Mobile Navigation */}
-  <nav className={`mobile-nav ${mobileOpen ? 'open' : ''}`}>
+  <nav id="mobile-nav" className={`mobile-nav ${mobileOpen ? 'open' : ''}`} aria-label="Mobile navigation">
     <a href="#features" onClick={() => setMobileOpen(false)}>Features</a>
     <a href="#pricing" onClick={() => setMobileOpen(false)}>Pricing</a>
     <a href="#how" onClick={() => setMobileOpen(false)}>API</a>
@@ -549,10 +701,12 @@ if (user) {
             Deterministic scoring · evidence is shown, never hidden.
           </div>
           <form className="scan-form" onSubmit={handleScan}>
+            <label className="sr-label" htmlFor="scan-url-input">Website URL to scan</label>
             <span className="url-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20 15.3 15.3 0 0 1 0-20z"/></svg>
             </span>
             <input
+              id="scan-url-input"
               type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
@@ -561,11 +715,16 @@ if (user) {
               spellCheck="false"
             />
             <button type="submit" className="btn btn-gradient btn-pulse" disabled={scanning}>
-              {scanning ? 'Scanning...' : 'Inject Serum →'}
+              {scanning ? 'Scanning…' : 'Inject Serum →'}
             </button>
           </form>
           {apiError && (
-            <div className="api-error">⚠️ {apiError}</div>
+            <div className="api-error" role="alert">⚠️ {apiError}</div>
+          )}
+          {scanning && (
+            <p className="scan-note" role="status">
+              Analyzing the website… first scans can take up to about a minute while the service warms up.
+            </p>
           )}
           <div className="hero-hints">
             Try a sample:
@@ -678,20 +837,24 @@ if (user) {
                         <h4>✓ What We Verified</h4>
                         {result.verified.length > 0 ? (
                           <ul>
-                            {result.verified.map((item, i) => (
-                              <li key={i}>
-                                <span className="flag-dot green"></span>
-                                <span className="ev-item">
-                                  <strong className="sig-cat">{item.category}</strong>
-                                  <span className="ev-signal"> · {item.signal}</span>
-                                  {item.explanation ? <span className="expl"> — {item.explanation}</span> : null}
-                                  <span className="effect">
-                                    {item.applied_effect != null ? `${item.applied_effect > 0 ? '+' : ''}${item.applied_effect}` : `${item.effect > 0 ? '+' : ''}${item.effect}`}
-                                    {item.applied_effect != null && item.raw_effect !== item.applied_effect ? ` (raw ${item.raw_effect})` : ''}
+                            {result.verified.map((item, i) => {
+                              const effectValue = item.applied_effect != null ? item.applied_effect : item.effect;
+                              const tone = classifyEffect(effectValue);
+                              return (
+                                <li key={i}>
+                                  <span className={`flag-dot evidence-${tone}`}></span>
+                                  <span className="ev-item">
+                                    <strong className="sig-cat">{categoryLabel(item.category)}</strong>
+                                    <span className="ev-signal"> · {signalLabel(item.signal)}</span>
+                                    {item.explanation ? <span className="expl"> — {item.explanation}</span> : null}
+                                    <span className="effect">
+                                      {item.applied_effect != null ? `${item.applied_effect > 0 ? '+' : ''}${item.applied_effect}` : `${item.effect > 0 ? '+' : ''}${item.effect}`}
+                                      {item.applied_effect != null && item.raw_effect !== item.applied_effect ? ` (raw ${item.raw_effect})` : ''}
+                                    </span>
                                   </span>
-                                </span>
-                              </li>
-                            ))}
+                                </li>
+                              );
+                            })}
                           </ul>
                         ) : (
                           <ul>
@@ -705,14 +868,14 @@ if (user) {
                           <>
                             <div className="nd-chips">
                               {result.notDetermined.map((cat, i) => (
-                                <span key={i} className="nd-chip">{cat}<em> not measured</em></span>
+                                <span key={i} className="nd-chip">{categoryLabel(cat)}<em> not measured</em></span>
                               ))}
                             </div>
                             <p className="nd-note">Unknown is neutral — a dimension that was not measured is neither safe nor unsafe.</p>
                           </>
                         ) : (
                           <ul>
-                            <li><span className="flag-dot green"></span>All planned evidence dimensions were measured.</li>
+                            <li><span className="flag-dot green"></span>All planned evidence areas were measured.</li>
                           </ul>
                         )}
                       </div>
@@ -725,7 +888,7 @@ if (user) {
                             const detail = result.breakdownDetail && result.breakdownDetail[cat];
                             return (
                               <div key={cat} className="breakdown-row">
-                                <span className="bd-cat">{cat}{detail && detail.capped ? ' *' : ''}</span>
+                                <span className="bd-cat">{categoryLabel(cat)}{detail && detail.capped ? ' *' : ''}</span>
                                 <span className="bd-track">
                                   <span className="bd-fill" style={{ width: `${Math.min(100, Math.abs(delta) * 10)}%`, background: delta >= 0 ? 'linear-gradient(90deg,#22c55e,#00FF66)' : 'linear-gradient(90deg,#ef4444,#f87171)' }}></span>
                                 </span>
@@ -744,14 +907,28 @@ if (user) {
                         <p className="bd-note">No category contributions — the score remains at the neutral anchor (50) because nothing could be verified.</p>
                       )}
                     </div>
+                    {result.notes && result.notes.length > 0 ? (
+                      <div className="notes-box">
+                        <h4>About this score</h4>
+                        <ul>
+                          {result.notes.map((note, i) => (
+                            <li key={i}>{note}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </>
                 )}
                 <div className="summary-box">{result.summary || 'This assessment reflects the evidence we could verify — it is not a guarantee of legitimacy or safety.'}</div>
                 <div className="results-actions">
-                  <button className="btn btn-gradient">📤 Share Report</button>
-                  <button className="btn btn-ghost">📋 Copy Link</button>
-                  <button className="btn btn-ghost" onClick={() => { setShowResults(false); setUrl(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Scan another URL</button>
+                  <button className="btn btn-gradient" type="button" disabled aria-describedby="share-unavailable-reason" title="Report sharing is not available in this version">📤 Share Report</button>
+                  <span id="share-unavailable-reason" className="sr-label">Report sharing is not available in this version. Use Copy Link to copy the scanned URL.</span>
+                  <button className="btn btn-ghost" type="button" onClick={copyScanLink}>📋 Copy Link</button>
+                  <button className="btn btn-ghost" type="button" onClick={() => { setShowResults(false); setUrl(''); setCopyFeedback(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Scan another URL</button>
                 </div>
+                {copyFeedback && (
+                  <p className="copy-status" role="status">{copyFeedback}</p>
+                )}
               </div>
             </div>
             <p className="demo-note">// report from live API — data based on actual analysis</p>
