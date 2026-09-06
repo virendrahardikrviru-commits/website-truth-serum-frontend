@@ -8,6 +8,7 @@ import HowItWorksPage from './pages/HowItWorksPage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
 import { getCurrentUser, supabase } from './services/auth';
+import PublicReportPage from './pages/PublicReportPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -100,6 +101,7 @@ function App() {
         <Route path="/how-it-works" element={<HowItWorksPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
+	<Route path="/report/:scanId" element={<PublicReportPage />} />
         <Route path="*" element={<LandingPage />} />
       </Routes>
     </BrowserRouter>
