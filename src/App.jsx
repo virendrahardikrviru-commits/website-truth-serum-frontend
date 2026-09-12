@@ -9,6 +9,7 @@ import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
 import { getCurrentUser, supabase } from './services/auth';
 import PublicReportPage from './pages/PublicReportPage';
+import WebsiteSafetyCheckerPage from './pages/WebsiteSafetyCheckerPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -95,6 +96,11 @@ function App() {
               }}
             />
           }
+        />
+
+        <Route
+          path="/website-safety-checker"
+          element={<WebsiteSafetyCheckerPage />}
         />
         <Route path="/features" element={<FeaturesPage />} />
         <Route path="/pricing" element={<PricingPage />} />
