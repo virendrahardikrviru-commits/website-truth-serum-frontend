@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import FullLogo from './FullLogo';
 import SEO from './SEO';
 import FAQ from './FAQ';
@@ -1034,6 +1035,34 @@ if (user) {
                 <span>neutral anchor</span><span>category caps</span><span>confidence</span><span>bounded scans</span>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ========== CHOOSE YOUR CHECKER ========== */}
+      <section>
+        <div className="container">
+          <div className="section-head">
+            <span className="eyebrow">Choose Your Checker</span>
+            <h2>Find the right check for your question</h2>
+            <p>Different questions need different checks. Start with the one that matches what you're trying to find out.</p>
+          </div>
+          <div className="bento">
+            <Link to="/website-safety-checker" className="bento-card" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div className="bento-icon">🔒</div>
+              <h3>Website Safety Checker</h3>
+              <p>Check observable security, TLS, HTTPS, domain, and page evidence before interacting with a site.</p>
+            </Link>
+            <Link to="/website-scam-checker" className="bento-card" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div className="bento-icon">🚨</div>
+              <h3>Website Scam Checker</h3>
+              <p>Investigate observable scam-related red flags and understand what the evidence can and cannot tell you.</p>
+            </Link>
+            <Link to="/website-legitimacy-checker" className="bento-card" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div className="bento-icon">✓</div>
+              <h3>Website Legitimacy Checker</h3>
+              <p>Review evidence that may support confidence and see clearly what remains unverified.</p>
+            </Link>
           </div>
         </div>
       </section>
