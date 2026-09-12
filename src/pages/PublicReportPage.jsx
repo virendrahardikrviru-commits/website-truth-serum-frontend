@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Helmet } from 'react-helmet-async';
 import { Link, useParams } from 'react-router-dom';
+import SEO from '../components/SEO';
+import { SITE_URL, SITE_NAME } from '../config/site';
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
@@ -85,12 +86,16 @@ const PublicReportPage = () => {
     };
   }, [scanId]);
 
+  const canonicalUrl = `${SITE_URL}/report/${encodeURIComponent(scanId || '')}`;
+
   if (status === 'loading') {
     return (
       <>
-        <Helmet>
-          <title>Loading Risk Report | Website Truth Serum</title>
-        </Helmet>
+        <SEO
+          title="Loading Risk Report"
+          canonical={canonicalUrl}
+          noindex
+        />
 
         <main className="public-report-page">
           <div className="public-report-state">
@@ -106,9 +111,11 @@ const PublicReportPage = () => {
   if (status === 'not-found') {
     return (
       <>
-        <Helmet>
-          <title>Report Not Found | Website Truth Serum</title>
-        </Helmet>
+        <SEO
+          title="Report Not Found"
+          canonical={canonicalUrl}
+          noindex
+        />
 
         <main className="public-report-page">
           <div className="public-report-state">
@@ -132,9 +139,11 @@ const PublicReportPage = () => {
   if (status === 'error') {
     return (
       <>
-        <Helmet>
-          <title>Report Unavailable | Website Truth Serum</title>
-        </Helmet>
+        <SEO
+          title="Report Unavailable"
+          canonical={canonicalUrl}
+          noindex
+        />
 
         <main className="public-report-page">
           <div className="public-report-state">
@@ -188,6 +197,36 @@ const PublicReportPage = () => {
     report?.summary ||
     'No summary was provided for this report.';
 
+  const reportTitle =
+    typeof score === 'number'
+      ? `${domain} Website Risk Report — Score ${score}`
+      : `${domain} Website Risk Report`;
+
+  const reportDescription = `View the Website Truth Serum risk report for ${domain}, including its score, confidence, verified evidence, and what could not be determined.`;
+
+  const analyzedAt =
+    typeof report?.analyzed_at === 'string' &&
+    report.analyzed_at.trim() !== '' &&
+    !Number.isNaN(Date.parse(report.analyzed_at))
+      ? report.analyzed_at
+      : null;
+
+  const articleSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: `${reportTitle} | ${SITE_NAME}`,
+    description: reportDescription,
+    url: canonicalUrl,
+    publisher: {
+      '@type': 'Organization',
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+    ...(analyzedAt
+      ? { datePublished: analyzedAt, dateModified: analyzedAt }
+      : {}),
+  };
+
   const baseScore =
     typeof transparency.reconciliation?.base === 'number'
       ? transparency.reconciliation.base
@@ -200,13 +239,13 @@ const PublicReportPage = () => {
 
   return (
     <>
-      <Helmet>
-        <title>{domain} Risk Report | Website Truth Serum</title>
-        <meta
-          name="description"
-          content={`Evidence-based website risk report for ${domain} from Website Truth Serum.`}
-        />
-      </Helmet>
+      <SEO
+        title={reportTitle}
+        description={reportDescription}
+        canonical={canonicalUrl}
+        type="article"
+        schema={articleSchema}
+      />
 
       <main className="public-report-page">
         <div className="public-report-container">
