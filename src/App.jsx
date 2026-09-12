@@ -11,6 +11,7 @@ import { getCurrentUser, supabase } from './services/auth';
 import PublicReportPage from './pages/PublicReportPage';
 import WebsiteSafetyCheckerPage from './pages/WebsiteSafetyCheckerPage';
 import WebsiteScamCheckerPage from './pages/WebsiteScamCheckerPage';
+import WebsiteLegitimacyCheckerPage from './pages/WebsiteLegitimacyCheckerPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -106,6 +107,10 @@ function App() {
         <Route
           path="/website-scam-checker"
           element={<WebsiteScamCheckerPage />}
+        />
+        <Route
+          path="/website-legitimacy-checker"
+          element={<WebsiteLegitimacyCheckerPage />}
         />
         <Route path="/features" element={<FeaturesPage />} />
         <Route path="/pricing" element={<PricingPage />} />
