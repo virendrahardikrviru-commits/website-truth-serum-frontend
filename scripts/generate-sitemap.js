@@ -4,29 +4,41 @@
  * Generates public/sitemap.xml for Website Truth Serum.
  *
  * Combines:
- *   1. The static marketing pages (/, /features, /pricing, /how-it-works,
- *      /about, /contact).
- *   2. Public report URLs fetched from the backend (best-effort — if the
- *      backend does not expose a report list yet, the script falls back to
- *      the static pages only and prints a warning).
+ *   1. Static marketing pages.
+ *   2. SEO-eligible public report URLs fetched from the backend.
+ *
+ * Public report URLs are sourced exclusively from:
+ *   GET /api/reports/sitemap
+ *
+ * The backend is authoritative for SEO eligibility. This script only
+ * converts the returned scan IDs into public report URLs.
  *
  * Usage:
  *   npm run generate:sitemap
  *
  * Environment variables (all optional):
- *   SITE_URL    - Base URL of the site.      Default: https://websitetruthserum.com
- *   VITE_API_URL - Backend API base URL.     Default: https://website-truth-serum-api.onrender.com
+ *   SITE_URL      - Base URL of the site.
+ *                   Default: https://websitetruthserum.com
  *
- * The script is invoked automatically before every `vite build` via the
- * "prebuild" npm script so the shipped sitemap is always fresh.
+ *   VITE_API_URL  - Backend API base URL.
+ *                   Default: https://website-truth-serum-api.onrender.com
+ *
+ * The script is invoked automatically before every Vite build via the
+ * "prebuild" npm script.
  */
 
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-const SITE_URL = (process.env.SITE_URL || 'https://websitetruthserum.com').replace(/\/$/, '');
-const API_URL = (process.env.VITE_API_URL || 'https://website-truth-serum-api.onrender.com').replace(/\/$/, '');
+const SITE_URL = (
+  process.env.SITE_URL || 'https://websitetruthserum.com'
+).replace(/\/$/, '');
+
+const API_URL = (
+  process.env.VITE_API_URL ||
+  'https://website-truth-serum-api.onrender.com'
+).replace(/\/$/, '');
 
 // Path to public/sitemap.xml (this file lives in <root>/scripts).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,15 +54,13 @@ const STATIC_PAGES = [
   { path: '/contact', priority: '0.6', changefreq: 'monthly' },
 ];
 
-// Candidate report-list endpoints on the FastAPI backend. The script tries
-// each until one returns data; unknown response shapes are handled gracefully.
-const REPORT_ENDPOINTS = [
-  `${API_URL}/api/reports/`,
-  `${API_URL}/api/reports`,
-  `${API_URL}/api/public-reports`,
-];
+// The backend is authoritative for public-report SEO eligibility.
+// Only scan IDs returned by this endpoint are added to the sitemap.
+const REPORT_SITEMAP_ENDPOINT = `${API_URL}/api/reports/sitemap`;
 
-/** Escape a string for safe inclusion inside XML text/attribute values. */
+/**
+ * Escape a string for safe inclusion inside XML text/attribute values.
+ */
 const escapeXml = (value) =>
   String(value)
     .replace(/&/g, '&amp;')
@@ -59,48 +69,65 @@ const escapeXml = (value) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
-/** Best-effort fetch of public report URLs from the backend. */
+/**
+ * Fetch SEO-eligible public reports from the backend and convert their
+ * scan IDs into site-relative report paths.
+ */
 async function fetchReportPaths() {
-  for (const endpoint of REPORT_ENDPOINTS) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
 
-      const res = await fetch(endpoint, { signal: controller.signal });
-      clearTimeout(timer);
+  try {
+    const response = await fetch(REPORT_SITEMAP_ENDPOINT, {
+      signal: controller.signal,
+    });
 
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      // Accept any of these shapes:
-      //   ["https://.../report/x"] | ["/report/x"] | { reports: [...] } | { results: [...] }
-      const list = Array.isArray(data)
-        ? data
-        : (data.reports || data.results || data.urls || []);
-
-      const paths = list
-        .map((entry) => {
-          const item = typeof entry === 'string' ? { url: entry } : entry || {};
-          if (item.url) return item.url;
-          if (item.path) return item.path;
-          if (item.domain) return `/report/${encodeURIComponent(item.domain)}`;
-          if (item.slug) return `/report/${encodeURIComponent(item.slug)}`;
-          return null;
-        })
-        .filter(Boolean)
-        // Normalize to site-relative paths.
-        .map((url) => url.replace(SITE_URL, ''))
-        .filter((path) => path.startsWith('/'));
-
-      if (paths.length > 0) return paths;
-    } catch {
-      // Try the next endpoint.
+    if (!response.ok) {
+      console.warn(
+        `Public report sitemap endpoint returned HTTP ${response.status}.`
+      );
+      return [];
     }
+
+    const data = await response.json();
+
+    if (!data || !Array.isArray(data.reports)) {
+      console.warn(
+        'Public report sitemap endpoint returned an unexpected response shape.'
+      );
+      return [];
+    }
+
+    const paths = data.reports
+      .map((report) => {
+        if (!report || !report.scan_id) {
+          return null;
+        }
+
+        return `/report/${encodeURIComponent(report.scan_id)}`;
+      })
+      .filter(Boolean);
+
+    // Remove accidental duplicate URLs while preserving order.
+    return [...new Set(paths)];
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      console.warn('Public report sitemap request timed out.');
+    } else {
+      console.warn(
+        `Could not fetch public report URLs: ${error?.message || 'Unknown error'}.`
+      );
+    }
+
+    return [];
+  } finally {
+    clearTimeout(timer);
   }
-  return [];
 }
 
-/** Build the <urlset> XML string. */
+/**
+ * Build the <urlset> XML string.
+ */
 function buildSitemap(reportPaths, lastmod) {
   const urls = [
     ...STATIC_PAGES.map((page) => ({
@@ -109,6 +136,7 @@ function buildSitemap(reportPaths, lastmod) {
       changefreq: page.changefreq,
       priority: page.priority,
     })),
+
     ...reportPaths.map((path) => ({
       loc: `${SITE_URL}${path}`,
       lastmod,
@@ -136,18 +164,27 @@ ${urlTags}
 }
 
 async function main() {
-  const lastmod = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const lastmod = new Date().toISOString().slice(0, 10);
 
   const reportPaths = await fetchReportPaths();
+
   if (reportPaths.length > 0) {
-    console.log(`Fetched ${reportPaths.length} public report URLs from the backend.`);
+    console.log(
+      `Fetched ${reportPaths.length} SEO-eligible public report URLs from the backend.`
+    );
   } else {
-    console.warn('No public report URLs found on the backend — sitemap will contain static pages only.');
+    console.warn(
+      'No SEO-eligible public report URLs found on the backend — sitemap will contain static pages only.'
+    );
   }
 
   const xml = buildSitemap(reportPaths, lastmod);
+
   writeFileSync(OUT_FILE, xml, 'utf8');
-  console.log(`Sitemap written to ${OUT_FILE} (${STATIC_PAGES.length} static + ${reportPaths.length} report URLs).`);
+
+  console.log(
+    `Sitemap written to ${OUT_FILE} (${STATIC_PAGES.length} static + ${reportPaths.length} report URLs).`
+  );
 }
 
 main().catch((error) => {
