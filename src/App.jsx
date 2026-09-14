@@ -12,6 +12,7 @@ import PublicReportPage from './pages/PublicReportPage';
 import WebsiteSafetyCheckerPage from './pages/WebsiteSafetyCheckerPage';
 import WebsiteScamCheckerPage from './pages/WebsiteScamCheckerPage';
 import WebsiteLegitimacyCheckerPage from './pages/WebsiteLegitimacyCheckerPage';
+import WebsiteTrustCheckerPage from './pages/WebsiteTrustCheckerPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -112,6 +113,10 @@ function App() {
           path="/website-legitimacy-checker"
           element={<WebsiteLegitimacyCheckerPage />}
         />
+        <Route
+  path="/website-trust-checker"
+  element={<WebsiteTrustCheckerPage />}
+/>
         <Route path="/features" element={<FeaturesPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/how-it-works" element={<HowItWorksPage />} />

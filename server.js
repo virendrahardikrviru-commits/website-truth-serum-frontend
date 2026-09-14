@@ -24,6 +24,50 @@ const SITE_URL = (
 
 const REPORT_TIMEOUT_MS = 15000;
 
+const LANDING_PAGE_SEO = {
+  '/website-trust-checker': {
+    title: 'Website Trust Checker',
+    description:
+      'Check whether a website appears trustworthy using verified domain, HTTPS, TLS, security, and page evidence. See risk, confidence, and what remains unknown.',
+    canonicalPath: '/website-trust-checker',
+  },
+
+  '/website-scam-checker': {
+    title: 'Website Scam Checker',
+    description:
+      'Check a website for technical and security evidence that may indicate scam risk. Review verified signals, confidence, and what could not be determined.',
+    canonicalPath: '/website-scam-checker',
+  },
+
+  '/website-safety-checker': {
+    title: 'Website Safety Checker',
+    description:
+      'Check website safety using HTTPS, TLS, security configuration, domain information, and page evidence. See what is verified and what remains unknown.',
+    canonicalPath: '/website-safety-checker',
+  },
+
+  '/website-legitimacy-checker': {
+    title: 'Website Legitimacy Checker',
+    description:
+      'Check a website for evidence related to legitimacy, including domain information, HTTPS, security configuration, and page signals.',
+    canonicalPath: '/website-legitimacy-checker',
+  },
+
+  '/how-to-check-if-a-website-is-legitimate': {
+    title: 'How to Check if a Website Is Legitimate',
+    description:
+      'Learn how to check whether a website is legitimate using domain information, HTTPS, security evidence, page signals, and transparent risk indicators.',
+    canonicalPath: '/how-to-check-if-a-website-is-legitimate',
+  },
+
+  '/how-to-tell-if-a-website-is-a-scam': {
+    title: 'How to Tell if a Website Is a Scam',
+    description:
+      'Learn how to evaluate a suspicious website using technical evidence, domain information, security signals, and clear indicators of what is known or unknown.',
+    canonicalPath: '/how-to-tell-if-a-website-is-a-scam',
+  },
+};
+
 /**
  * Escape text before inserting it into HTML.
  */
@@ -332,6 +376,127 @@ function injectNoindex(html, scanId) {
 }
 
 /**
+ * Replace generic SPA SEO metadata with search-intent
+ * landing-page metadata.
+ *
+ * This keeps the initial HTML accurate before React loads.
+ */
+function injectLandingPageSeo(html, seo) {
+  const title = escapeHtml(
+    `${seo.title} | Website Truth Serum`
+  );
+
+  const description = escapeHtml(seo.description);
+
+  const canonicalUrl = escapeHtml(
+    `${SITE_URL}${seo.canonicalPath}`
+  );
+
+  const imageUrl = escapeHtml(
+    `${SITE_URL}/og-image.png`
+  );
+
+  const ogTitle = title;
+  const ogDescription = description;
+
+  const landingMeta = `
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <link rel="canonical" href="${canonicalUrl}" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${canonicalUrl}" />
+    <meta property="og:site_name" content="Website Truth Serum" />
+    <meta property="og:title" content="${ogTitle}" />
+    <meta property="og:description" content="${ogDescription}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Website Truth Serum" />
+    <meta property="og:locale" content="en_US" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@websitetruthserum" />
+    <meta name="twitter:creator" content="@websitetruthserum" />
+    <meta name="twitter:title" content="${ogTitle}" />
+    <meta name="twitter:description" content="${ogDescription}" />
+    <meta name="twitter:image" content="${imageUrl}" />
+  `;
+
+  return html
+    .replace(/<title>[\s\S]*?<\/title>/i, '')
+    .replace(
+      /<meta\s+name=["']description["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+name=["']robots["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<link\s+rel=["']canonical["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+property=["']og:type["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+property=["']og:url["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+property=["']og:site_name["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+property=["']og:title["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+property=["']og:description["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+property=["']og:image["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+property=["']og:image:width["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+property=["']og:image:height["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+property=["']og:image:alt["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+property=["']og:locale["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+name=["']twitter:title["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+name=["']twitter:description["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<meta\s+name=["']twitter:image["'][^>]*>\s*/i,
+      ''
+    )
+    .replace(
+      /<\/head>/i,
+      `${landingMeta}\n  </head>`
+    );
+}
+
+/**
  * Serve Vite's static assets.
  */
 app.use(express.static(DIST_DIR));
@@ -396,6 +561,10 @@ app.get('/report/:scanId', async (req, res) => {
 
 /**
  * All other routes continue using the normal Vite SPA shell.
+ *
+ * Search-intent landing pages receive server-generated SEO
+ * metadata so crawlers can see the correct metadata before
+ * React loads.
  */
 app.get('*', async (req, res) => {
   try {
@@ -404,7 +573,15 @@ app.get('*', async (req, res) => {
       'utf8'
     );
 
-    res
+    const seo = LANDING_PAGE_SEO[req.path];
+
+    if (seo) {
+      return res
+        .type('html')
+        .send(injectLandingPageSeo(html, seo));
+    }
+
+    return res
       .type('html')
       .send(html);
   } catch (error) {
@@ -413,7 +590,7 @@ app.get('*', async (req, res) => {
       error
     );
 
-    res
+    return res
       .status(500)
       .send('Application build is unavailable.');
   }
