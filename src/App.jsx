@@ -13,6 +13,8 @@ import WebsiteSafetyCheckerPage from './pages/WebsiteSafetyCheckerPage';
 import WebsiteScamCheckerPage from './pages/WebsiteScamCheckerPage';
 import WebsiteLegitimacyCheckerPage from './pages/WebsiteLegitimacyCheckerPage';
 import WebsiteTrustCheckerPage from './pages/WebsiteTrustCheckerPage';
+import HowToCheckWebsiteLegitimatePage from './pages/HowToCheckWebsiteLegitimatePage';
+import HowToTellWebsiteScamPage from './pages/HowToTellWebsiteScamPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -116,6 +118,14 @@ function App() {
         <Route
   path="/website-trust-checker"
   element={<WebsiteTrustCheckerPage />}
+/>
+<Route
+  path="/how-to-check-if-a-website-is-legitimate"
+  element={<HowToCheckWebsiteLegitimatePage />}
+/>
+<Route
+  path="/how-to-tell-if-a-website-is-a-scam"
+  element={<HowToTellWebsiteScamPage />}
 />
         <Route path="/features" element={<FeaturesPage />} />
         <Route path="/pricing" element={<PricingPage />} />

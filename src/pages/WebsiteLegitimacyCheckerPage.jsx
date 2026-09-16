@@ -185,6 +185,13 @@ const WebsiteLegitimacyCheckerPage = () => (
             describe how a site presents itself — not who is behind it. The scan
             reports only the observable parts.
           </p>
+          <p>
+            For a practical step-by-step approach, read our guide on{" "}
+            <Link to="/how-to-check-if-a-website-is-legitimate">
+              how to check if a website is legitimate
+            </Link>
+            .
+          </p>
         </div>
 
         <div className="page-grid">

@@ -171,6 +171,17 @@ const WebsiteTrustCheckerPage = () => (
             trustworthy. A better approach is to look at several observable
             dimensions and understand the limits of each one.
           </p>
+          <p>
+            Learn more with our guides on{" "}
+            <Link to="/how-to-check-if-a-website-is-legitimate">
+              checking if a website is legitimate
+            </Link>
+            {" "}and{" "}
+            <Link to="/how-to-tell-if-a-website-is-a-scam">
+              telling if a website is a scam
+            </Link>
+            .
+          </p>
         </div>
 
         <div className="page-grid">

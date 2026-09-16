@@ -208,6 +208,13 @@ const WebsiteScamCheckerPage = () => (
             suspicious. They are habits for you to apply — the scan only reports
             the observable evidence it can actually collect.
           </p>
+          <p>
+            Want a practical checklist before you decide? Read our guide on{" "}
+            <Link to="/how-to-tell-if-a-website-is-a-scam">
+              how to tell if a website is a scam
+            </Link>
+            .
+          </p>
         </div>
 
         <div className="page-grid">

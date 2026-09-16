@@ -111,6 +111,13 @@ const WebsiteSafetyCheckerPage = () => (
             A website safety assessment should show its evidence instead of
             pretending that a single signal can prove everything about a site.
           </p>
+          <p>
+            If you are deciding whether a site deserves your trust, see our guide on{" "}
+            <Link to="/how-to-check-if-a-website-is-legitimate">
+              how to check if a website is legitimate
+            </Link>
+            .
+          </p>
         </div>
 
         <div className="page-grid">
