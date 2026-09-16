@@ -52,6 +52,18 @@ const STATIC_PAGES = [
   { path: '/how-it-works', priority: '0.8', changefreq: 'monthly' },
   { path: '/about', priority: '0.7', changefreq: 'monthly' },
   { path: '/contact', priority: '0.6', changefreq: 'monthly' },
+
+  // Educational SEO guides.
+  {
+    path: '/how-to-check-if-a-website-is-legitimate',
+    priority: '0.8',
+    changefreq: 'monthly',
+  },
+  {
+    path: '/how-to-tell-if-a-website-is-a-scam',
+    priority: '0.8',
+    changefreq: 'monthly',
+  },
 ];
 
 // The backend is authoritative for public-report SEO eligibility.
