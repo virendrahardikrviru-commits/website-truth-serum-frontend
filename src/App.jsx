@@ -14,6 +14,7 @@ import WebsiteScamCheckerPage from './pages/WebsiteScamCheckerPage';
 import WebsiteLegitimacyCheckerPage from './pages/WebsiteLegitimacyCheckerPage';
 import WebsiteTrustCheckerPage from './pages/WebsiteTrustCheckerPage';
 import HowToCheckWebsiteLegitimatePage from './pages/HowToCheckWebsiteLegitimatePage';
+import HowToCheckWebsiteSafePage from './pages/HowToCheckWebsiteSafePage';
 import HowToTellWebsiteScamPage from './pages/HowToTellWebsiteScamPage';
 
 function App() {
@@ -122,6 +123,10 @@ function App() {
 <Route
   path="/how-to-check-if-a-website-is-legitimate"
   element={<HowToCheckWebsiteLegitimatePage />}
+/>
+<Route
+  path="/how-to-check-if-a-website-is-safe"
+  element={<HowToCheckWebsiteSafePage />}
 />
 <Route
   path="/how-to-tell-if-a-website-is-a-scam"

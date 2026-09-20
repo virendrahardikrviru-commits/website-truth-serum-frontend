@@ -1,4 +1,4 @@
-/**
+﻿/**
  * generate-sitemap.js
  *
  * Generates public/sitemap.xml for Website Truth Serum.
@@ -61,6 +61,11 @@ const STATIC_PAGES = [
   },
   {
     path: '/how-to-tell-if-a-website-is-a-scam',
+    priority: '0.8',
+    changefreq: 'monthly',
+  },
+  {
+    path: '/how-to-check-if-a-website-is-safe',
     priority: '0.8',
     changefreq: 'monthly',
   },
@@ -186,7 +191,7 @@ async function main() {
     );
   } else {
     console.warn(
-      'No SEO-eligible public report URLs found on the backend — sitemap will contain static pages only.'
+      'No SEO-eligible public report URLs found on the backend â€” sitemap will contain static pages only.'
     );
   }
 
@@ -203,3 +208,5 @@ main().catch((error) => {
   console.error('Failed to generate sitemap:', error);
   process.exitCode = 1;
 });
+
+
