@@ -124,6 +124,13 @@ async function fetchPublicReport(scanId) {
 }
 
 if (!response.ok) {
+  const responseBody = await response.text().catch(() => '');
+
+  console.warn(
+    `Public report API returned ${response.status} for ${scanId}.`,
+    responseBody.slice(0, 500)
+  );
+
   return {
     status: 'error',
     report: null,
@@ -137,16 +144,20 @@ return {
   report,
 };
   } catch (error) {
-    console.warn(
-      `Public report fetch failed for ${scanId}:`,
-      error?.message || error
-    );
+  console.warn(
+    `Public report fetch failed for ${scanId}:`,
+    {
+      name: error?.name,
+      message: error?.message,
+      cause: error?.cause,
+    }
+  );
 
-    return {
-      status: 'error',
-      report: null,
-    };
-  } finally {
+  return {
+    status: 'error',
+    report: null,
+  };
+} finally {
     clearTimeout(timeout);
   }
 }
