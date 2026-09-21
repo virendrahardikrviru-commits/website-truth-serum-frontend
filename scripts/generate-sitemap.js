@@ -91,57 +91,79 @@ const escapeXml = (value) =>
  * scan IDs into site-relative report paths.
  */
 async function fetchReportPaths() {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
+  const MAX_ATTEMPTS = 3;
+  const TIMEOUT_MS = 30000;
+  const RETRY_DELAY_MS = 2000;
 
-  try {
-    const response = await fetch(REPORT_SITEMAP_ENDPOINT, {
-      signal: controller.signal,
-    });
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    if (!response.ok) {
-      console.warn(
-        `Public report sitemap endpoint returned HTTP ${response.status}.`
+    try {
+      console.log(
+        `Fetching public report sitemap (attempt ${attempt}/${MAX_ATTEMPTS})...`
       );
-      return [];
-    }
 
-    const data = await response.json();
+      const response = await fetch(REPORT_SITEMAP_ENDPOINT, {
+        signal: controller.signal,
+      });
 
-    if (!data || !Array.isArray(data.reports)) {
-      console.warn(
-        'Public report sitemap endpoint returned an unexpected response shape.'
-      );
-      return [];
-    }
+      if (!response.ok) {
+        console.warn(
+          `Public report sitemap endpoint returned HTTP ${response.status}.`
+        );
+      } else {
+        const data = await response.json();
 
-    const paths = data.reports
-      .map((report) => {
-        if (!report || !report.scan_id) {
-          return null;
+        if (!data || !Array.isArray(data.reports)) {
+          console.warn(
+            'Public report sitemap endpoint returned an unexpected response shape.'
+          );
+        } else {
+          const paths = data.reports
+            .map((report) => {
+              if (!report || !report.scan_id) {
+                return null;
+              }
+
+              return `/report/${encodeURIComponent(report.scan_id)}`;
+            })
+            .filter(Boolean);
+
+          // Remove accidental duplicate URLs while preserving order.
+          return [...new Set(paths)];
         }
-
-        return `/report/${encodeURIComponent(report.scan_id)}`;
-      })
-      .filter(Boolean);
-
-    // Remove accidental duplicate URLs while preserving order.
-    return [...new Set(paths)];
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      console.warn('Public report sitemap request timed out.');
-    } else {
-      console.warn(
-        `Could not fetch public report URLs: ${error?.message || 'Unknown error'}.`
-      );
+      }
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        console.warn(
+          `Public report sitemap request timed out after ${TIMEOUT_MS / 1000}s.`
+        );
+      } else {
+        console.warn(
+          `Could not fetch public report URLs: ${
+            error?.message || 'Unknown error'
+          }.`
+        );
+      }
+    } finally {
+      clearTimeout(timer);
     }
 
-    return [];
-  } finally {
-    clearTimeout(timer);
+    if (attempt < MAX_ATTEMPTS) {
+      console.log(`Retrying in ${RETRY_DELAY_MS / 1000}s...`);
+      await new Promise((resolve) =>
+        setTimeout(resolve, RETRY_DELAY_MS)
+      );
+    }
   }
-}
 
+  console.warn(
+    'All attempts to fetch public report URLs failed. Continuing with static pages only.'
+  );
+
+  return [];
+}
 /**
  * Build the <urlset> XML string.
  */
@@ -208,5 +230,4 @@ main().catch((error) => {
   console.error('Failed to generate sitemap:', error);
   process.exitCode = 1;
 });
-
 
