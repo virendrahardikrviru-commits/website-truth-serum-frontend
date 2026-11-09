@@ -210,6 +210,7 @@ const LandingPage = ({ user, onLogin, onLogout }) => {
 if (user) {
   try {
     await saveScanHistory(user.id, {
+      scanId: data.scan_id,		
       domain: data.domain,
       trust_score: data.trust_score,
       category: data.category,
@@ -220,7 +221,7 @@ if (user) {
     });
     console.log('Scan saved to history!');
   } catch (historyError) {
-    console.error('Failed to save scan history:', historyError);
+    console.error('Failed to save scan history:', "message:", historyError.message, "| details:", historyError.details, "| hint:", historyError.hint, "| code:", historyError.code);
   }
 }
 
@@ -677,21 +678,41 @@ if (user) {
       </ul>
     </nav>
 
-    {/* Header CTA with Auth Buttons - NO "Try It Now" */}
-    <div className="header-cta" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+    {/* Header CTA with Auth Buttons */}
+    <div className="header-cta" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
       {user ? (
         <>
-          <span style={{
-            fontSize: '13px',
-            color: '#0f172a',
-            fontWeight: '500',
-            maxWidth: '100px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
+          {/* Circular Avatar */}
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            backgroundColor: '#4f46e5',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: '700',
+            fontSize: '14px',
+            textTransform: 'uppercase'
           }}>
-            👤 {user.email?.split('@')[0]}
-          </span>
+            {user.email?.charAt(0) || 'U'}
+          </div>
+
+          {/* Dashboard Link */}
+          <Link
+            to="/dashboard"
+            style={{
+              textDecoration: 'none',
+              fontSize: '13px',
+              color: '#475569',
+              fontWeight: '500'
+            }}
+          >
+            Dashboard
+          </Link>
+
+          {/* Logout Button */}
           <button
             className="btn btn-ghost btn-sm"
             onClick={onLogout}
@@ -724,10 +745,22 @@ if (user) {
     <a href="#footer" onClick={() => setMobileOpen(false)}>Documentation</a>
 
     {user ? (
-      <>
-        <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500', padding: '8px 0' }}>
-          👤 {user.email?.split('@')[0]}
-        </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0' }}>
+          <div style={{
+            width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#4f46e5',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: '700', fontSize: '13px', textTransform: 'uppercase'
+          }}>
+            {user.email?.charAt(0) || 'U'}
+          </div>
+          <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: '500' }}>
+            {user.email?.split('@')[0]}
+          </span>
+        </div>
+        <Link to="/dashboard" onClick={() => setMobileOpen(false)} style={{ textDecoration: 'none', color: '#475569', fontWeight: '500', padding: '8px 0', fontSize: '14px' }}>
+          Dashboard
+        </Link>
         <button
           className="btn btn-ghost btn-sm"
           onClick={onLogout}
@@ -735,7 +768,7 @@ if (user) {
         >
           Logout
         </button>
-      </>
+      </div>
     ) : (
       <button
         className="btn btn-gradient btn-sm"

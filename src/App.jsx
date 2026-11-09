@@ -4,6 +4,7 @@ import { getCurrentUser, supabase } from './services/auth';
 
 // Lazy load all pages so they are not bundled into main.js
 const LandingPage = lazy(() => import('./components/LandingPage'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Auth = lazy(() => import('./components/Auth'));
 const FeaturesPage = lazy(() => import('./pages/FeaturesPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
@@ -25,22 +26,19 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes('access_token')) {
-      window.location.href = '/';
-    }
-  }, []);
-
-  useEffect(() => {
     const checkUser = async () => {
-      const { user } = await getCurrentUser();
-      setUser(user);
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user || null);
       setLoading(false);
     };
     checkUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user || null);
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setUser(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -119,6 +117,19 @@ function App() {
               />
             }
           />
+	  <Route
+  path="/dashboard"
+  element={
+    <Dashboard
+      user={user}
+      onLogin={() => setShowAuth(true)}
+      onLogout={async () => {
+        await supabase.auth.signOut();
+        setUser(null);
+      }}
+    />
+  }
+/>
           <Route path="/website-safety-checker" element={<WebsiteSafetyCheckerPage />} />
           <Route path="/website-scam-checker" element={<WebsiteScamCheckerPage />} />
           <Route path="/website-legitimacy-checker" element={<WebsiteLegitimacyCheckerPage />} />

@@ -34,6 +34,17 @@ export const signIn = async (email, password) => {
   }
 };
 
+// Sign In with Google OAuth
+export const signInWithGoogle = async () => {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin
+    }
+  });
+  return { data, error };
+};
+
 // Sign Out
 export const signOut = async () => {
   try {
@@ -56,38 +67,33 @@ export const getCurrentUser = async () => {
 
 // ========== SAVE SCAN HISTORY ========== 👈 ADD THIS
 export const saveScanHistory = async (userId, scanData) => {
-  try {
-    const scanRecord = {
-      user_id: userId,
-      domain: scanData.domain,
-      trust_score: scanData.trust_score,
-      category: scanData.category,
-      red_flags: scanData.red_flags,
-      green_flags: scanData.green_flags,
-      summary: scanData.summary,
-      scanned_at: new Date().toISOString(),
-    };
-    if (scanData.ai_probability != null) {
-      scanRecord.ai_probability = scanData.ai_probability;
-    }
-    const { data, error } = await supabase
-      .from('scan_history')
-      .insert([scanRecord]);
-    return { data, error };
-  } catch (error) {
-    console.error('Save scan history error:', error);
-    return { data: null, error };
+  const { data, error } = await supabase
+    .from('scan_reports')
+    .insert([
+      {
+        user_id: userId, // This connects the scan to the logged-in user
+        scan_id: crypto.randomUUID(), 
+        domain: scanData.domain,
+        scanned_url: scanData.scannedUrl || `https://${scanData.domain}`,
+        report: scanData 
+      }
+    ]);
+    
+  if (error) {
+    console.error("Supabase Insert Error:", "message:", error.message, "| details:", error.details, "| hint:", error.hint, "| code:", error.code);
+    throw error;
   }
+  return data;
 };
 
 // ========== GET SCAN HISTORY ========== 👈 Optional: Add this too
 export const getScanHistory = async (userId) => {
   try {
     const { data, error } = await supabase
-      .from('scan_history')
+      .from('scan_reports') // Fixed table name
       .select('*')
       .eq('user_id', userId)
-      .order('scanned_at', { ascending: false })
+      .order('created_at', { ascending: false }) // Fixed column name
       .limit(50);
     return { data, error };
   } catch (error) {
