@@ -20,6 +20,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@500;600;700;800&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js"></script>
+  <script src="js/supabase-config.js"></script>
   <script src="js/main.js" defer></script>
 </head>
 <body>
@@ -269,7 +271,7 @@
         <div class="audience-intro reveal">
           <div class="eyebrow"><span class="eyebrow-line"></span> Designed for modern business</div>
           <h2 id="audience-title">Built for businesses that work with people they haven’t met.</h2>
-          <p>When your next supplier, contractor or partner is on the other side of the internet—or the world—a little more evidence can go a long way.</p>
+          <p>When your next supplier, contractor or partner is on the other side of the internetâ€”or the worldâ€”a little more evidence can go a long way.</p>
           <a class="text-link" href="#early-access">Verify your next business relationship <svg class="icon" aria-hidden="true"><use href="#icon-arrow"/></svg></a>
         </div>
         <div class="audience-grid">
@@ -307,18 +309,18 @@
             </div>
             <div class="report-panels">
               <section class="report-panel" role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" data-report-panel="overview">
-                <div class="panel-heading"><div><span class="micro-label">BUSINESS OVERVIEW</span><h3>Northstar Supply Co.</h3><p><svg class="icon" aria-hidden="true"><use href="#icon-globe"/></svg> northstar-supply.example <span>·</span> International supplier</p></div><span class="status status-review"><i></i>Review in progress</span></div>
+                <div class="panel-heading"><div><span class="micro-label">BUSINESS OVERVIEW</span><h3>Northstar Supply Co.</h3><p><svg class="icon" aria-hidden="true"><use href="#icon-globe"/></svg> northstar-supply.example <span>Â·</span> International supplier</p></div><span class="status status-review"><i></i>Review in progress</span></div>
                 <div class="overview-summary"><svg class="icon" aria-hidden="true"><use href="#icon-file"/></svg><p>Several information sources are available for review. Some business identity details still require independent confirmation before a payment decision.</p></div>
                 <div class="overview-grid">
                   <div><span class="overview-icon info"><svg class="icon" aria-hidden="true"><use href="#icon-domain"/></svg></span><strong>Website &amp; domain</strong><p>Information found</p></div>
                   <div><span class="overview-icon review"><svg class="icon" aria-hidden="true"><use href="#icon-building"/></svg></span><strong>Business identity</strong><p>Needs verification</p></div>
                   <div><span class="overview-icon warning"><svg class="icon" aria-hidden="true"><use href="#icon-alert"/></svg></span><strong>Warning indicators</strong><p>1 item to review</p></div>
                 </div>
-                <div class="panel-note"><strong>How to read this example</strong><p>Statuses describe the state of information—not whether a business is “good” or “bad.” No single indicator should be considered in isolation.</p></div>
+                <div class="panel-note"><strong>How to read this example</strong><p>Statuses describe the state of informationâ€”not whether a business is â€œgoodâ€ or â€œbad.â€ No single indicator should be considered in isolation.</p></div>
               </section>
               <section class="report-panel" role="tabpanel" id="panel-domain" aria-labelledby="tab-domain" data-report-panel="domain" hidden>
                 <div class="panel-heading"><div><span class="micro-label">WEBSITE &amp; DOMAIN INTELLIGENCE</span><h3>What the domain can tell us</h3><p>Illustrative observations for northstar-supply.example</p></div><span class="status status-info"><i></i>Information found</span></div>
-                <div class="finding-list"><article><span class="finding-marker info"></span><div><h4>Registration information</h4><p>Available registration and nameserver records would be documented with their source and retrieval date.</p><span>Source: public domain records · Illustrative</span></div></article><article><span class="finding-marker review"></span><div><h4>Website history and consistency</h4><p>Historical website references and business claims would be compared for relevant inconsistencies.</p><span>Further independent verification recommended</span></div></article></div>
+                <div class="finding-list"><article><span class="finding-marker info"></span><div><h4>Registration information</h4><p>Available registration and nameserver records would be documented with their source and retrieval date.</p><span>Source: public domain records Â· Illustrative</span></div></article><article><span class="finding-marker review"></span><div><h4>Website history and consistency</h4><p>Historical website references and business claims would be compared for relevant inconsistencies.</p><span>Further independent verification recommended</span></div></article></div>
                 <div class="panel-note"><strong>Context matters</strong><p>A new domain is not proof of fraudulent activity. It is one signal to assess alongside the rest of the evidence.</p></div>
               </section>
               <section class="report-panel" role="tabpanel" id="panel-identity" aria-labelledby="tab-identity" data-report-panel="identity" hidden>
@@ -328,15 +330,15 @@
               </section>
               <section class="report-panel" role="tabpanel" id="panel-contact" aria-labelledby="tab-contact" data-report-panel="contact" hidden>
                 <div class="panel-heading"><div><span class="micro-label">CONTACT CONSISTENCY</span><h3>Do the contact details align?</h3><p>Compare how the business presents itself across sources</p></div><span class="status status-info"><i></i>Information found</span></div>
-                <div class="finding-list"><article><span class="finding-marker info"></span><div><h4>Email and domain relationship</h4><p>Example contact: sales@northstar-supply.example. The email domain would be compared with the submitted website.</p><span>Relationship visible · Ownership not implied</span></div></article><article><span class="finding-marker review"></span><div><h4>Telephone and address consistency</h4><p>Contact details would be compared across the website, available business records and other public references.</p><span>Independent confirmation remains necessary</span></div></article></div>
+                <div class="finding-list"><article><span class="finding-marker info"></span><div><h4>Email and domain relationship</h4><p>Example contact: sales@northstar-supply.example. The email domain would be compared with the submitted website.</p><span>Relationship visible Â· Ownership not implied</span></div></article><article><span class="finding-marker review"></span><div><h4>Telephone and address consistency</h4><p>Contact details would be compared across the website, available business records and other public references.</p><span>Independent confirmation remains necessary</span></div></article></div>
               </section>
               <section class="report-panel" role="tabpanel" id="panel-warnings" aria-labelledby="tab-warnings" data-report-panel="warnings" hidden>
-                <div class="panel-heading"><div><span class="micro-label">POTENTIAL WARNING INDICATORS</span><h3>Signals that deserve a closer look</h3><p>Concerns are presented with context—not as accusations</p></div><span class="status status-warning"><i></i>Potential warning sign</span></div>
+                <div class="panel-heading"><div><span class="micro-label">POTENTIAL WARNING INDICATORS</span><h3>Signals that deserve a closer look</h3><p>Concerns are presented with contextâ€”not as accusations</p></div><span class="status status-warning"><i></i>Potential warning sign</span></div>
                 <div class="warning-example"><svg class="icon" aria-hidden="true"><use href="#icon-alert"/></svg><div><h4>Illustrative payment-detail inconsistency</h4><p>In this fictional example, the payment recipient name would differ from the business name presented on the website. This deserves clarification through a trusted, independently confirmed channel.</p><ul><li>Do not rely solely on contact details in the payment-change message.</li><li>Compare the recipient identity with verified business details.</li></ul></div></div>
                 <div class="panel-note"><strong>A warning sign is not a verdict</strong><p>Legitimate explanations may exist. The purpose is to identify what should be checked before money changes hands.</p></div>
               </section>
               <section class="report-panel" role="tabpanel" id="panel-sources" aria-labelledby="tab-sources" data-report-panel="sources" hidden>
-                <div class="panel-heading"><div><span class="micro-label">EVIDENCE SOURCES</span><h3>Findings with a visible trail</h3><p>Example categories—not live sources for a real company</p></div><span class="status status-info"><i></i>Sources documented</span></div>
+                <div class="panel-heading"><div><span class="micro-label">EVIDENCE SOURCES</span><h3>Findings with a visible trail</h3><p>Example categoriesâ€”not live sources for a real company</p></div><span class="status status-info"><i></i>Sources documented</span></div>
                 <div class="source-list"><article><svg class="icon" aria-hidden="true"><use href="#icon-domain"/></svg><div><h4>Public domain records</h4><p>Registration details and technical records, where accessible.</p></div><span>RETRIEVAL DATE RECORDED</span></article><article><svg class="icon" aria-hidden="true"><use href="#icon-building"/></svg><div><h4>Business information sources</h4><p>Public registries or official records, where available.</p></div><span>JURISDICTION DEPENDENT</span></article><article><svg class="icon" aria-hidden="true"><use href="#icon-globe"/></svg><div><h4>Website and public references</h4><p>Submitted pages and relevant publicly available information.</p></div><span>CONTEXT PROVIDED</span></article></div>
               </section>
               <section class="report-panel" role="tabpanel" id="panel-unknown" aria-labelledby="tab-unknown" data-report-panel="unknown" hidden>
@@ -399,7 +401,7 @@
 
     <section class="section faq-section" id="faq" aria-labelledby="faq-title">
       <div class="container faq-layout">
-        <div class="faq-intro reveal"><div class="eyebrow"><span class="eyebrow-line"></span> Questions, answered clearly</div><h2 id="faq-title">Before you place your trust.</h2><p>Understand what this early-access service can—and cannot—help you establish.</p><a class="text-link" href="#early-access">Still have a question? Start a request <svg class="icon" aria-hidden="true"><use href="#icon-arrow"/></svg></a></div>
+        <div class="faq-intro reveal"><div class="eyebrow"><span class="eyebrow-line"></span> Questions, answered clearly</div><h2 id="faq-title">Before you place your trust.</h2><p>Understand what this early-access service canâ€”and cannotâ€”help you establish.</p><a class="text-link" href="#early-access">Still have a question? Start a request <svg class="icon" aria-hidden="true"><use href="#icon-arrow"/></svg></a></div>
         <div class="faq-list reveal">
           <article class="faq-item"><h3><button type="button" aria-expanded="true" aria-controls="faq-answer-1" id="faq-question-1">Does a professional website mean a business is legitimate?<span class="faq-toggle" aria-hidden="true"></span></button></h3><div class="faq-answer" id="faq-answer-1" role="region" aria-labelledby="faq-question-1"><p>No. Website appearance alone cannot establish business legitimacy. Independent checks are important.</p></div></article>
           <article class="faq-item"><h3><button type="button" aria-expanded="false" aria-controls="faq-answer-2" id="faq-question-2">What information do you investigate?<span class="faq-toggle" aria-hidden="true"></span></button></h3><div class="faq-answer" id="faq-answer-2" role="region" aria-labelledby="faq-question-2" hidden><p>Depending on availability, domain information, website characteristics, business records, contact details and potential warning signs.</p></div></article>
@@ -429,11 +431,11 @@
       <div class="footer-links"><div><h2>Explore</h2><a href="#how-it-works">How It Works</a><a href="#what-we-check">What We Check</a><a href="#sample-report">Sample Report</a></div><div><h2>Company</h2><a href="#who-its-for">Who It’s For</a><a href="#faq">FAQ</a><a href="#early-access">Request Early Access</a></div><div><h2>Legal &amp; Contact</h2><button type="button" data-dialog-open="privacy-dialog">Privacy Notice <span>Draft</span></button><button type="button" data-dialog-open="terms-dialog">Terms of Service <span>Draft</span></button><span class="contact-placeholder">Contact email to be confirmed</span></div></div>
     </div>
     <div class="container footer-disclaimer"><svg class="icon" aria-hidden="true"><use href="#icon-alert"/></svg><p>This service provides informational business intelligence based on available sources. It is not a guarantee of legitimacy, financial advice, legal advice or a substitute for independent due diligence.</p></div>
-    <div class="container footer-bottom"><span>© <span id="current-year">2026</span> VERITY. All rights reserved.</span><span>Clarity before commitment.</span></div>
+    <div class="container footer-bottom"><span>Â© <span id="current-year">2026</span> VERITY. All rights reserved.</span><span>Clarity before commitment.</span></div>
   </footer>
 
   <dialog class="legal-dialog" id="privacy-dialog" aria-labelledby="privacy-title">
-    <div class="dialog-top"><span class="form-step-label">LEGAL PLACEHOLDER · DRAFT</span><button class="dialog-close" type="button" aria-label="Close privacy notice" data-dialog-close><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <div class="dialog-top"><span class="form-step-label">LEGAL PLACEHOLDER Â· DRAFT</span><button class="dialog-close" type="button" aria-label="Close privacy notice" data-dialog-close><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
     <h2 id="privacy-title">Privacy Notice</h2>
     <p class="dialog-intro">This draft explains the intended handling of early-access request data. It must be reviewed and completed with the operator’s legal identity and contact details before public launch.</p>
     <h3>Information collected</h3><p>The request form collects your name, business email, company details, websites, supplier country and any investigation context you choose to provide. Please do not submit passwords, bank account details or unnecessary sensitive information.</p>
@@ -443,7 +445,7 @@
   </dialog>
 
   <dialog class="legal-dialog" id="terms-dialog" aria-labelledby="terms-title">
-    <div class="dialog-top"><span class="form-step-label">LEGAL PLACEHOLDER · DRAFT</span><button class="dialog-close" type="button" aria-label="Close terms of service" data-dialog-close><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
+    <div class="dialog-top"><span class="form-step-label">LEGAL PLACEHOLDER Â· DRAFT</span><button class="dialog-close" type="button" aria-label="Close terms of service" data-dialog-close><svg class="icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
     <h2 id="terms-title">Terms of Service</h2>
     <p class="dialog-intro">These draft terms describe the intended early-access service. Final contractual terms, operator identity and contact details must be added before public launch.</p>
     <h3>Early-access requests</h3><p>A request expresses interest in a manually prepared initial report. It is not an order, payment authorization or commitment to purchase. Investigation scope and pricing must be agreed separately before paid work starts.</p>

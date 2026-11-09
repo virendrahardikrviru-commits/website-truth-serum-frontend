@@ -1,0 +1,1 @@
+﻿window.VERITY_SUPABASE_CONFIG = {"anonKey":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3cGpudnZwYXN4eW1zeWp5aG9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMTEyMjQsImV4cCI6MjEwMjc4NzIyNH0.MfMoorSMo6sYiUh52UDBuU2PsGV6HvCiIo1XvH7e4Qk","url":"https://lwpjnvvpasxymsyjyhon.supabase.co"};

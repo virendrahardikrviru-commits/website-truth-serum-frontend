@@ -155,6 +155,18 @@
   const form = select('#verification-request-form');
   if (!form) return;
 
+  // VERITY uses the existing WebsiteTruthSerum Supabase project.
+  const supabaseConfig = window.VERITY_SUPABASE_CONFIG;
+  const supabaseClient = (
+    window.supabase &&
+    typeof window.supabase.createClient === 'function' &&
+    supabaseConfig &&
+    supabaseConfig.url &&
+    supabaseConfig.anonKey
+  )
+    ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey)
+    : null;
+
   const submitButton = select('[data-submit-button]', form);
   const submitLabel = select('[data-submit-label]', form);
   const submitArrow = submitButton ? select('.icon', submitButton) : null;
@@ -259,7 +271,7 @@
   const setSubmitting = (submitting) => {
     submitButton.disabled = submitting;
     submitButton.setAttribute('aria-busy', String(submitting));
-    submitLabel.textContent = submitting ? 'Submitting Your Request…' : 'Request My Verification Report';
+    submitLabel.textContent = submitting ? 'Submitting Your Request' + '\u2026' : 'Request My Verification Report';
     if (submitArrow) submitArrow.hidden = submitting;
     if (spinner) spinner.hidden = !submitting;
     selectAll('input, select, textarea', form).forEach((field) => {
@@ -309,43 +321,44 @@
       source: 'verity_early_access_landing_page'
     };
 
+    if (!supabaseClient) {
+      showFormError('The request service is not configured correctly. Your entries remain in the form. Please contact the site operator.');
+      return;
+    }
+
     setSubmitting(true);
 
-    let response;
-    try {
-      response = await fetch('tables/verification_requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-    } catch {
-      showFormError('We could not reach the request service. Your information has not been confirmed as saved, and your entries remain in the form. Check your connection and try again. If the problem continues, request storage may not yet be enabled on this site.');
-      setSubmitting(false);
-      return;
-    }
-
-    if (!response.ok) {
-      showFormError(submissionErrorMessage(response.status));
-      setSubmitting(false);
-      return;
-    }
-
     let savedRecord;
+
     try {
-      const result = await response.json();
-      savedRecord = result && result.data && result.data.id ? result.data : result;
+      // Generate a reference locally. No SELECT permission is required.
+      const requestId = crypto.randomUUID();
+
+      const { error } = await supabaseClient
+        .from('verity_enquiries')
+        .insert({
+          id: requestId,
+          full_name: payload.full_name,
+          business_email: payload.business_email,
+          company_name: payload.company_name || null,
+          business_type: payload.business_type || null,
+          business_website: payload.business_website,
+          supplier_website: payload.supplier_website,
+          supplier_country: payload.supplier_country || null,
+          investigation_notes: payload.investigation_notes || null,
+          privacy_consent: payload.privacy_consent
+        });
+
+      if (error) throw error;
+
+      // The insert succeeded. The locally generated ID identifies the saved row.
+      savedRecord = { id: requestId };
+
     } catch {
-      showFormError('The request service responded, but its confirmation could not be read. To avoid a duplicate request, please do not resubmit until the site operator has checked whether your request was received. Your entries remain in the form.');
+      showFormError('We could not save your request. Your information has not been confirmed as saved, and your entries remain in the form. Please check your connection and try again later.');
       setSubmitting(false);
       return;
     }
-
-    if (!savedRecord || typeof savedRecord.id !== 'string' || !savedRecord.id) {
-      showFormError('The request service did not return a valid saved-record confirmation. Your entries remain in the form. Please do not assume your request was received.');
-      setSubmitting(false);
-      return;
-    }
-
     // Success is shown only after a real saved record and ID are returned.
     requestReference.textContent = `VR-${savedRecord.id.slice(0, 8).toUpperCase()}`;
     form.hidden = true;
