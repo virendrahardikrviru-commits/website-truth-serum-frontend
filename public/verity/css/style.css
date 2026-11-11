@@ -730,3 +730,154 @@ h3 { letter-spacing: -0.025em; }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   .reveal { opacity: 1; transform: none; }
 }
+
+/* VERITY enquiry form — structured sections */
+.form-section {
+  margin-top: 25px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.form-section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.form-section-title {
+  margin: 0 0 13px;
+  color: var(--navy);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.form-section-title > span[aria-hidden="true"] {
+  color: var(--teal-dark);
+}
+
+.form-section > .field-hint {
+  margin: -5px 0 12px;
+  font-size: 9px;
+}
+
+/* Requested service checkboxes */
+.service-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.service-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px 12px;
+  color: #526575;
+  background: #fbfcfd;
+  border: 1px solid #d7e1e8;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.service-option:hover {
+  background: #f4f9f9;
+  border-color: #a9ceca;
+}
+
+.service-option:has(input:checked) {
+  background: #f0f8f7;
+  border-color: var(--teal-dark);
+}
+
+.service-option input {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  margin: 1px 0 0;
+  accent-color: var(--teal-dark);
+  cursor: pointer;
+}
+
+.service-option span {
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.service-option:focus-within {
+  outline: 2px solid rgba(13, 133, 129, 0.25);
+  outline-offset: 2px;
+}
+
+.service-options[aria-invalid="true"] .service-option {
+  border-color: #d9aaaa;
+}
+
+#requested-services-error {
+  margin-top: 7px;
+}
+
+/* Paid-service fee notice */
+.paid-service-section {
+  margin-top: 27px;
+}
+
+.paid-service-notice {
+  padding: 15px 16px;
+  color: #526575;
+  background: #f3f8f8;
+  border: 1px solid #d8e9e7;
+  border-left: 3px solid var(--teal-dark);
+  border-radius: 5px;
+}
+
+.paid-service-notice strong {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--navy);
+  font-size: 11px;
+}
+
+.paid-service-notice p {
+  margin: 0 0 7px;
+  font-size: 9px;
+  line-height: 1.65;
+}
+
+.paid-service-notice p:last-child {
+  margin-bottom: 0;
+  color: var(--teal-dark);
+  font-weight: 600;
+}
+
+.paid-service-section .consent-field {
+  margin-top: 14px;
+}
+
+/* Small-screen service layout */
+@media (max-width: 560px) {
+  .service-options {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .service-option {
+    padding: 12px;
+  }
+
+  .service-option span {
+    font-size: 10px;
+  }
+
+  .paid-service-notice {
+    padding: 13px;
+  }
+
+  .paid-service-notice p {
+    font-size: 10px;
+  }
+}

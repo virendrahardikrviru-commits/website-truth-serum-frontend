@@ -186,7 +186,12 @@
     businessWebsite: select('#business-website'),
     supplierWebsite: select('#supplier-website'),
     supplierCountry: select('#supplier-country'),
+    services: select('#requested-services'),
+    purpose: select('#verification-purpose'),
+    purposeDetails: select('#purpose-details'),
     notes,
+    deliverable: select('#expected-deliverable'),
+    paidAck: select('#paid-service-acknowledgement'),
     consent: select('#privacy-consent')
   };
 
@@ -220,7 +225,19 @@
   };
 
   const clearErrors = () => {
-    [fields.fullName, fields.email, fields.businessWebsite, fields.supplierWebsite, fields.consent].forEach((field) => setFieldError(field, ''));
+    [
+      fields.fullName,
+      fields.email,
+      fields.businessWebsite,
+      fields.supplierWebsite,
+      fields.services,
+      fields.purpose,
+      fields.notes,
+      fields.deliverable,
+      fields.paidAck,
+      fields.consent
+    ].forEach((field) => setFieldError(field, ''));
+
     if (formStatus) formStatus.hidden = true;
   };
 
@@ -247,6 +264,33 @@
       }
     });
 
+    const selectedServices = fields.services.querySelectorAll('input[name="requested_services"]:checked');
+
+    if (selectedServices.length === 0) {
+      setFieldError(fields.services, 'Please select at least one verification service.');
+      invalidFields.push(fields.services.querySelector('input[name="requested_services"]'));
+    }
+
+    if (!fields.purpose.value) {
+      setFieldError(fields.purpose, 'Please select why you need this verification.');
+      invalidFields.push(fields.purpose);
+    }
+
+    if (fields.notes.value.trim().length < 10) {
+      setFieldError(fields.notes, 'Please provide at least 10 characters describing what you want investigated.');
+      invalidFields.push(fields.notes);
+    }
+
+    if (!fields.deliverable.value) {
+      setFieldError(fields.deliverable, 'Please select your expected deliverable.');
+      invalidFields.push(fields.deliverable);
+    }
+
+    if (!fields.paidAck.checked) {
+      setFieldError(fields.paidAck, 'Please acknowledge the paid-service terms before submitting.');
+      invalidFields.push(fields.paidAck);
+    }
+
     if (!fields.consent.checked) {
       setFieldError(fields.consent, 'Please confirm that we may use these details to respond to your request.');
       invalidFields.push(fields.consent);
@@ -256,22 +300,45 @@
       invalidFields[0].focus();
       return false;
     }
+
     return true;
   };
 
-  [fields.fullName, fields.email, fields.businessWebsite, fields.supplierWebsite].forEach((field) => {
+  [
+    fields.fullName,
+    fields.email,
+    fields.businessWebsite,
+    fields.supplierWebsite,
+    fields.notes
+  ].forEach((field) => {
     field.addEventListener('input', () => {
       if (field.getAttribute('aria-invalid') === 'true') setFieldError(field, '');
     });
   });
+
+  [fields.purpose, fields.deliverable].forEach((field) => {
+    field.addEventListener('change', () => setFieldError(field, ''));
+  });
+
+  fields.services.querySelectorAll('input[name="requested_services"]').forEach((checkbox) => {
+    checkbox.addEventListener('change', () => {
+      if (fields.services.querySelector('input[name="requested_services"]:checked')) {
+        setFieldError(fields.services, '');
+      }
+    });
+  });
+
+  fields.paidAck.addEventListener('change', () => {
+    if (fields.paidAck.checked) setFieldError(fields.paidAck, '');
+  });
+
   fields.consent.addEventListener('change', () => {
     if (fields.consent.checked) setFieldError(fields.consent, '');
   });
-
   const setSubmitting = (submitting) => {
     submitButton.disabled = submitting;
     submitButton.setAttribute('aria-busy', String(submitting));
-    submitLabel.textContent = submitting ? 'Submitting Your Request' + '\u2026' : 'Request My Verification Report';
+    submitLabel.textContent = submitting ? 'Submitting Your Request' + '\u2026' : 'Submit Verification Enquiry';
     if (submitArrow) submitArrow.hidden = submitting;
     if (spinner) spinner.hidden = !submitting;
     selectAll('input, select, textarea', form).forEach((field) => {
@@ -316,6 +383,14 @@
       supplier_website: normalizeWebsite(fields.supplierWebsite.value),
       supplier_country: fields.supplierCountry.value.trim(),
       investigation_notes: fields.notes.value.trim(),
+      requested_services: Array.from(
+        fields.services.querySelectorAll('input[name="requested_services"]:checked')
+      ).map((checkbox) => checkbox.value),
+      verification_purpose: fields.purpose.value,
+      purpose_details: fields.purposeDetails.value.trim(),
+      investigation_requirements: fields.notes.value.trim(),
+      expected_deliverable: fields.deliverable.value,
+      paid_service_acknowledgement: fields.paidAck.checked,
       privacy_consent: fields.consent.checked,
       request_status: 'new',
       source: 'verity_early_access_landing_page'
@@ -346,6 +421,12 @@
           supplier_website: payload.supplier_website,
           supplier_country: payload.supplier_country || null,
           investigation_notes: payload.investigation_notes || null,
+          requested_services: payload.requested_services,
+          verification_purpose: payload.verification_purpose,
+          purpose_details: payload.purpose_details || null,
+          investigation_requirements: payload.investigation_requirements,
+          expected_deliverable: payload.expected_deliverable,
+          paid_service_acknowledgement: payload.paid_service_acknowledgement,
           privacy_consent: payload.privacy_consent
         });
 
