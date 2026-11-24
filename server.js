@@ -508,17 +508,53 @@ function injectLandingPageSeo(html, seo) {
 }
 
 /**
- * Serve Vite's static assets.
+ * Hashed Vite asset bundles for the React application, mounted at /app/.
  */
-app.use(express.static(DIST_DIR));
+app.use('/app/assets', express.static(path.join(DIST_DIR, 'assets')));
 
 /**
- * Public report route.
+ * VERITY public homepage at /.
  *
- * This is the ONLY route that receives server-generated
- * report-specific SEO metadata.
+ * VERITY is a static site (public/verity/* is copied to dist/verity/ by
+ * Vite's public directory handling). Its HTML uses relative asset paths
+ * (css/style.css, js/main.js, favicon.svg, js/supabase-config.js), which
+ * resolve correctly because the dist/verity/ tree is mounted at the root
+ * below.
  */
-app.get('/report/:scanId', async (req, res) => {
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(DIST_DIR, 'verity', 'index.html'));
+});
+
+/**
+ * VERITY administrator dashboard at /admin and /admin/.
+ */
+app.get(['/admin', '/admin/'], (_req, res) => {
+  // Express matches /admin and /admin/ interchangeably unless strict
+  // routing is enabled, so normalise: redirect the canonical root to the
+  // trailing-slash URL so the admin HTML's relative asset paths resolve.
+  if (_req.path === '/admin') {
+    return res.redirect(301, '/admin/');
+  }
+  res.sendFile(path.join(DIST_DIR, 'verity', 'admin', 'index.html'));
+});
+
+/**
+ * Website Truth Serum React application shell, mounted at /app/.
+ *
+ * React Router uses basename "/app" (see src/App.jsx), so every client-side
+ * route (/dashboard, /report/:scanId, ...) is served from this shell.
+ */
+app.get(['/app', '/app/'], (_req, res) => {
+  res.sendFile(path.join(DIST_DIR, 'index.html'));
+});
+
+/**
+ * Public report route (server-generated SEO metadata).
+ *
+ * The React report page lives under the /app/ mount, so this route is
+ * /app/report/:scanId. React Router (basename "/app") renders PublicReportPage.
+ */
+app.get('/app/report/:scanId', async (req, res) => {
   const { scanId } = req.params;
 
   let html;
@@ -571,40 +607,46 @@ app.get('/report/:scanId', async (req, res) => {
 });
 
 /**
- * All other routes continue using the normal Vite SPA shell.
- *
- * Search-intent landing pages receive server-generated SEO
- * metadata so crawlers can see the correct metadata before
- * React loads.
+ * React public assets that Vite rewrites to the /app/ base
+ * (favicon.svg, og-image.png). These live at the build root.
+ * Registered before the /app/* fallback so they take priority.
  */
-app.get('*', async (req, res) => {
-  try {
-    const html = await fs.readFile(
-      INDEX_FILE,
-      'utf8'
-    );
+app.get('/app/favicon.svg', (_req, res) => {
+  res.sendFile(path.join(DIST_DIR, 'favicon.svg'));
+});
 
-    const seo = LANDING_PAGE_SEO[req.path];
+app.get('/app/og-image.png', (_req, res) => {
+  res.sendFile(path.join(DIST_DIR, 'og-image.png'));
+});
 
-    if (seo) {
-      return res
-        .type('html')
-        .send(injectLandingPageSeo(html, seo));
-    }
+/**
+ * React Router fallback for /app/* routes. Static assets under /app/assets/
+ * and the public files above are served by their mounts, so only non-asset
+ * paths reach here and receive the React shell.
+ */
+app.get('/app/*', (_req, res) => {
+  res.sendFile(path.join(DIST_DIR, 'index.html'));
+});
 
-    return res
-      .type('html')
-      .send(html);
-  } catch (error) {
-    console.error(
-      'Unable to read dist/index.html:',
-      error
-    );
+/**
+ * VERITY static assets (CSS, JS, favicon, Supabase config).
+ *
+ * Mounted at the root so relative paths in the VERITY HTML resolve at both
+ * / and /admin/. Registered after the explicit routes so those take priority.
+ */
+app.use(express.static(path.join(DIST_DIR, 'verity')));
 
-    return res
-      .status(500)
-      .send('Application build is unavailable.');
-  }
+/**
+ * Fallback static file serving from the build root (React favicon, robots.txt,
+ * sitemap, etc.). Only reached for files not handled above.
+ */
+app.use(express.static(DIST_DIR));
+
+/**
+ * Catch-all: anything not matched above falls back to the VERITY homepage.
+ */
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(DIST_DIR, 'verity', 'index.html'));
 });
 
 app.listen(PORT, () => {

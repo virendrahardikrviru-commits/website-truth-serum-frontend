@@ -19,6 +19,7 @@ const WebsiteTrustCheckerPage = lazy(() => import('./pages/WebsiteTrustCheckerPa
 const HowToCheckWebsiteLegitimatePage = lazy(() => import('./pages/HowToCheckWebsiteLegitimatePage'));
 const HowToCheckWebsiteSafePage = lazy(() => import('./pages/HowToCheckWebsiteSafePage'));
 const HowToTellWebsiteScamPage = lazy(() => import('./pages/HowToTellWebsiteScamPage'));
+const VerityAdmin = lazy(() => import('./pages/VerityAdmin'));
 
 function App() {
   const [user, setUser] = useState(null);
@@ -77,7 +78,7 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/app">
       <Suspense fallback={
         <div style={{
           display: 'flex',
@@ -143,6 +144,7 @@ function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/report/:scanId" element={<PublicReportPage />} />
+          <Route path="/admin" element={<VerityAdmin />} />
           <Route path="*" element={<LandingPage />} />
         </Routes>
       </Suspense>
