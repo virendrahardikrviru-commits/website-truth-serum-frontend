@@ -56,8 +56,16 @@ body {
 .admin-shell {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  width: 100%;
+  min-height: 100vh;
   overflow: hidden;
+}
+
+.admin-shell.dashboard-mode {
+  flex-direction: row;
+  height: 100vh;
+  min-height: 0;
+  align-items: stretch;
 }
 
 /* ---------- Login view ---------- */
@@ -310,6 +318,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
 }
 
 .admin-content {
@@ -557,4 +566,24 @@ dialog::backdrop { background: rgba(16, 36, 58, 0.45); backdrop-filter: blur(2px
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); border: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Fix admin button and SVG icon sizing */
+.button {
+  padding: 8px 14px;
+}
+
+.button .icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }

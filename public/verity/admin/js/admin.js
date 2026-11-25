@@ -469,22 +469,74 @@
       const statusSelect = filterBar.querySelector('#enq-status');
       const applyBtn = filterBar.querySelector('#btn-apply-filters');
 
-      // Populate status options from backend data
-      const statuses = [...new Set(enquiries.map((e) => e.status).filter(Boolean))];
-      statusSelect.innerHTML = '<option value="">All statuses</option>' + statuses.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'button button-secondary';
+      clearBtn.textContent = 'Clear filters';
+      applyBtn.parentElement.appendChild(clearBtn);
 
-      applyBtn.addEventListener('click', () => {
-        const term = searchInput.value.toLowerCase();
-        const st = statusSelect.value;
-        const filtered = enquiries.filter((e) => {
-          const haystack = ((e.business_email || '') + ' ' + (e.company_name || '') + ' ' + (e.id || '')).toLowerCase();
-          return (!term || haystack.includes(term)) && (!st || e.status === st);
+      // Always show every valid VERITY enquiry status.
+      const statuses = [
+        'new',
+        'reviewing',
+        'quoted',
+        'accepted',
+        'paid',
+        'completed',
+        'declined',
+      ];
+
+      statusSelect.innerHTML =
+        '<option value="">All statuses</option>' +
+        statuses.map((status) =>
+          `<option value="${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</option>`
+        ).join('');
+
+      // Apply search and status together.
+      function applyEnquiryFilters() {
+        const term = searchInput.value.trim().toLowerCase();
+        const selectedStatus = statusSelect.value;
+
+        const filtered = enquiries.filter((enquiry) => {
+          const searchableText = [
+            enquiry.business_email,
+            enquiry.company_name,
+            enquiry.id,
+            enquiry.full_name,
+            enquiry.business_website,
+            enquiry.supplier_website,
+          ].filter(Boolean).join(' ').toLowerCase();
+
+          return (
+            (!term || searchableText.includes(term)) &&
+            (!selectedStatus || enquiry.status === selectedStatus)
+          );
         });
+
         renderRows(filtered);
+      }
+
+      // Search immediately while typing.
+      searchInput.addEventListener('input', applyEnquiryFilters);
+
+      // Apply selected filters.
+      applyBtn.addEventListener('click', applyEnquiryFilters);
+
+      // Apply status selection immediately.
+      statusSelect.addEventListener('change', applyEnquiryFilters);
+
+      // Restore the complete enquiry list.
+      clearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        statusSelect.value = '';
+        renderRows(enquiries);
       });
 
       const refreshBtn = header.querySelector('#btn-refresh-enquiries');
-      refreshBtn.addEventListener('click', () => renderEnquiries());
+      refreshBtn.addEventListener('click', () => {
+        mainContent.innerHTML = '';
+        renderEnquiries();
+      });
 
       mainContent.appendChild(container);
     } catch (err) {
@@ -1339,6 +1391,26 @@
 
   // ---------------- Event wiring ----------------
 
+    document.querySelectorAll('.nav-link').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+
+      const viewId = link.dataset.nav;
+
+      if (viewId === 'logout') {
+        signOutAndRedirect();
+        return;
+      }
+
+      renderView(viewId);
+
+      if (window.innerWidth <= 900) {
+        adminSidebar.hidden = true;
+        menuToggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+  });
+
   loginForm.addEventListener('submit', (event) => {
     event.preventDefault();
     attemptLogin(adminEmail.value, adminPassword.value);
@@ -1412,10 +1484,10 @@
         if (err.status === 401 || err.status === 403) {
           await signOutAndRedirect();
         } else if (err.status === 502 || err.status === 503 || err.message === 'network_error') {
-          showLogin();
+         showLogin();
           setLoginError('The authentication service is temporarily unavailable. Please try again later.');
         } else {
-          showLogin();
+         showLogin();
           setLoginError('Unable to verify administrator access. Please try again.');
         }
       }
@@ -1432,7 +1504,9 @@
     supabase.auth.onAuthStateChange((event, session) => {
       if (initializing) return;
       if (event === 'SIGNED_OUT') {
-        signOutAndRedirect();
+        currentUser = null;
+        activeCaseId = null;
+        showLogin();
       } else if (event === 'TOKEN_REFRESHED' && session && session.access_token) {
         apiRequest(ENDPOINTS.adminMe)
           .then((me) => {
