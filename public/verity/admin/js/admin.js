@@ -58,6 +58,7 @@
   let currentUser = null; // { user_id: string } from /api/verity/admin/me
   let activeView = null;
   let activeCaseId = null;
+  let enquiriesById = new Map();
   let confirmResolve = null;
 
   // ---------------- Helpers ----------------
@@ -138,6 +139,56 @@
         hour: '2-digit', minute: '2-digit',
       });
     } catch { return String(iso); }
+  }
+
+  // ---------------- Enquiry detail helpers ----------------
+
+  const ENQUIRY_FIELD_LABELS = {
+    id: 'Enquiry ID',
+    full_name: 'Contact name',
+    business_email: 'Business email',
+    company_name: 'Company',
+    business_type: 'Business type',
+    business_website: 'Business website',
+    supplier_website: 'Supplier website',
+    supplier_country: 'Supplier country',
+    investigation_notes: 'Investigation notes',
+    privacy_consent: 'Privacy consent',
+    status: 'Enquiry status',
+    source: 'Submission source',
+    created_at: 'Date received',
+    requested_services: 'Requested services',
+    verification_purpose: 'Verification purpose',
+    purpose_details: 'Purpose details',
+    investigation_requirements: 'Investigation requirements',
+    expected_deliverable: 'Expected deliverable',
+    paid_service_acknowledgement: 'Paid service acknowledgement',
+  };
+
+  function formatEnquiryValue(key, value) {
+    if (value === null || value === undefined || value === '') return 'Not provided';
+
+    if (key === 'created_at') {
+      return formatDateTime(value);
+    }
+
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+
+    if (Array.isArray(value)) {
+      return value.length ? value.map(String).filter(String).join(', ') : 'Not provided';
+    }
+
+    if (typeof value === 'object') {
+      const json = JSON.stringify(value, null, 2);
+      return json ? json : 'Not provided';
+    }
+
+    return String(value);
+  }
+
+  function escapeHtmlWithLineBreaks(text) {
+    if (text == null) return '';
+    return escapeHtml(String(text)).replace(/\n/g, '<br>');
   }
 
   // ---------------- API request wrapper ----------------
@@ -329,6 +380,9 @@
         activeCaseId = caseId;
         renderCaseDetail(caseId);
         break;
+      case 'enquiry-detail':
+        renderEnquiryDetail(caseId);
+        break;
       default:
         renderEnquiries();
     }
@@ -361,6 +415,10 @@
       if (!data) return;
 
       const enquiries = Array.isArray(data.enquiries) ? data.enquiries : [];
+      enquiriesById.clear();
+      enquiries.forEach((enq) => {
+        if (enq && enq.id) enquiriesById.set(enq.id, enq);
+      });
 
       const container = document.createElement('div');
       container.className = 'view-container';
@@ -447,6 +505,7 @@
             <td>${created}</td>
             <td>${statusBadge}</td>
             <td>
+              <button class="button button-small button-ghost" data-action="view-details" data-enquiry-id="${escapeHtml(enq.id)}">View details</button>
               <button class="button button-small button-primary" data-action="open-case" data-enquiry-id="${escapeHtml(enq.id)}">Create case</button>
             </td>
           `;
@@ -458,6 +517,14 @@
           btn.addEventListener('click', () => {
             const enquiryId = btn.getAttribute('data-enquiry-id');
             openCaseFromEnquiry(enquiryId);
+          });
+        });
+
+        // Wire view details buttons
+        table.querySelectorAll('[data-action="view-details"]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const enquiryId = btn.getAttribute('data-enquiry-id');
+            renderView('enquiry-detail', enquiryId);
           });
         });
       }
@@ -796,6 +863,79 @@
         return;
       }
       handleApiError(err, 'Failed to load case details.');
+    }
+  }
+
+  // ---------------- Enquiry detail ----------------
+
+  async function renderEnquiryDetail(enquiryId) {
+    setContentLoading(true);
+    try {
+      const enquiry = enquiriesById.get(enquiryId);
+      setContentLoading(false);
+
+      const container = document.createElement('div');
+      container.className = 'view-container';
+
+      const ref = enquiry && enquiry.id
+        ? 'VR-' + enquiry.id.slice(0, 8).toUpperCase()
+        : '\u2014';
+      const headerBar = document.createElement('div');
+      headerBar.className = 'page-header';
+      headerBar.innerHTML = `
+        <div>
+          <h2>Enquiry ${escapeHtml(ref)}</h2>
+          <p>Submitted by ${enquiry ? escapeHtml(enquiry.full_name || enquiry.business_email || '\u2014') : '\u2014'}</p>
+        </div>
+        <div class="page-actions">
+          <button class="button button-ghost" id="btn-back-enquiries">
+            <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up"/></svg> Back to enquiries
+          </button>
+        </div>
+      `;
+      container.appendChild(headerBar);
+      headerBar.querySelector('#btn-back-enquiries').addEventListener('click', () => renderView('enquiries'));
+
+      if (!enquiry) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.innerHTML = `
+          <svg class="icon" aria-hidden="true"><use href="#icon-alert"/></svg>
+          <h3>Enquiry not found</h3>
+          <p>The requested enquiry does not exist or may have been removed.</p>
+        `;
+        container.appendChild(empty);
+        mainContent.appendChild(container);
+        return;
+      }
+
+      const detailCard = document.createElement('div');
+      detailCard.className = 'card';
+      detailCard.innerHTML = `
+        <div class="card-header">
+          <div>
+            <h3>Enquiry details</h3>
+            <div class="subtitle">Reference: ${escapeHtml(ref)}</div>
+          </div>
+          <span class="badge status-${(enquiry.status || 'unknown').toLowerCase().replace(/\s/g, '-')}">${escapeHtml(enquiry.status || '\u2014')}</span>
+        </div>
+        <div class="card-body">
+          <div class="detail-grid">
+            ${Object.entries(enquiry).map(([key, value]) => {
+              const label = ENQUIRY_FIELD_LABELS[key] ||
+                key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+              const displayValue = formatEnquiryValue(key, value);
+              return `<div class="detail-field"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtmlWithLineBreaks(displayValue)}</div></div>`;
+            }).join('')}
+          </div>
+        </div>
+      `;
+      container.appendChild(detailCard);
+
+      mainContent.appendChild(container);
+    } catch (err) {
+      setContentLoading(false);
+      handleApiError(err, 'Failed to load enquiry details.');
     }
   }
 
